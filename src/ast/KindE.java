@@ -1,0 +1,19 @@
+package ast;
+
+public enum KindE {
+	SUMA,
+	RESTA,
+	MUL,
+	DIV,
+	MENOR,
+	MAYOR,
+	IGUALDAD,
+	AND,
+	OR,
+	NUM,
+	ID,
+	BOOL,
+	ACCESO_ARRAY,
+	LLAMADA_FUNCION,
+	MENOS_UNARIO
+}

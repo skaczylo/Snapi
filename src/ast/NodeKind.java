@@ -1,0 +1,18 @@
+package ast;
+
+public enum NodeKind {
+	EXPRESION,
+	PROGRAMA,
+	BLOQUE,
+	ASIGNACION,
+	DEC_VAR,
+	TIPO_BASICO,
+	TIPO_ARRAY,
+	IF,
+	WHILE,
+	READ,
+	PRINT,
+	PARAMETRO,
+	DEC_FUNCION,
+	RETURN
+}

@@ -1,0 +1,292 @@
+package constructorast;
+
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import alex.AnalizadorLexico;
+import alex.UnidadLexica;
+import errors.GestionErrores;
+import ast.*;
+
+scan with {: return getScanner().next_token(); :};
+
+parser code {:
+   private GestionErrores errores;
+
+   public void syntax_error(Symbol unidadLexica) {
+      errores.errorSintactico((UnidadLexica) unidadLexica);
+   }
+:};
+
+init with {:
+   errores = new GestionErrores();
+   AnalizadorLexico alex = (AnalizadorLexico) getScanner();
+   alex.fijaGestionErrores(errores);
+:};
+
+/* Terminales */
+terminal VAR, DOS_PUNTOS, PUNTO_Y_COMA, IGUAL;
+terminal ARRAY, OF;
+terminal LLAVE_APERTURA, LLAVE_CIERRE;
+terminal FUNC, VOID, RETURN;
+terminal PARENTESIS_APERTURA, PARENTESIS_CIERRE;
+terminal CORCHETE_APERTURA, CORCHETE_CIERRE;
+terminal COMA, AMPERSAND;
+terminal INT, BOOL;
+terminal TRUE, FALSE;
+terminal SUMA, RESTA, MULTIPLICACION, DIVISION;
+terminal MENOR, MAYOR, IGUALDAD, AND, OR;
+terminal IF, ELSE, WHILE, READ, PRINT;
+terminal alex.TokenValue ID, NUM;
+
+/* No terminales tipados */
+non terminal Programa programa;
+non terminal List<I> lista_inst;
+non terminal I inst;
+
+non terminal Stmt stmt;
+non terminal Bloque bloque;
+non terminal List<Stmt> lista_stmt;
+
+non terminal DecVar declaracion_variable;
+non terminal DecFuncion declaracion_funcion;
+
+non terminal T tipo;
+non terminal List<Integer> dimensiones;
+
+non terminal List<Parametro> params_opt, lista_params;
+non terminal Parametro param;
+
+non terminal Asignacion asignacion;
+non terminal E lhs;
+
+non terminal If if_stmt;
+non terminal While while_stmt;
+non terminal Read read_stmt;
+non terminal Print print_stmt;
+non terminal Return return_stmt;
+
+non terminal E expr, expr_or, expr_and, expr_rel, expr_add, expr_mul, expr_unaria, expr_base;
+
+non terminal List<E> args_opt, lista_args;
+
+/* Símbolo inicial */
+start with programa;
+
+/* Gramática */
+
+programa ::= lista_inst:li
+             {: RESULT = new Programa(li); :}
+           ;
+
+lista_inst ::= lista_inst:li inst:i
+               {: li.add(i); RESULT = li; :}
+             | inst:i
+               {: 
+                  List<I> l = new ArrayList<I>();
+                  l.add(i);
+                  RESULT = l;
+               :}
+             ;
+
+inst ::= declaracion_funcion:f
+         {: RESULT = f; :}
+       | stmt:s
+         {: RESULT = s; :}
+       ;
+
+stmt ::= declaracion_variable:d
+         {: RESULT = d; :}
+       | if_stmt:i
+         {: RESULT = i; :}
+       | while_stmt:w
+         {: RESULT = w; :}
+       | read_stmt:r
+         {: RESULT = r; :}
+       | print_stmt:p
+         {: RESULT = p; :}
+       | bloque:b
+         {: RESULT = b; :}
+       | asignacion:a
+         {: RESULT = a; :}
+       | return_stmt:r
+         {: RESULT = r; :}
+       ;
+
+declaracion_variable ::= VAR tipo:t DOS_PUNTOS ID:id PUNTO_Y_COMA
+                         {: RESULT = new DecVar(t, id.lexema, null); :}
+                       | VAR tipo:t DOS_PUNTOS ID:id IGUAL expr:e PUNTO_Y_COMA
+                         {: RESULT = new DecVar(t, id.lexema, e); :}
+                       ;
+
+declaracion_funcion ::= FUNC tipo:t DOS_PUNTOS ID:id
+                        PARENTESIS_APERTURA params_opt:ps PARENTESIS_CIERRE bloque:b
+                        {: RESULT = new DecFuncion(t, id.lexema, ps, b); :}
+                      ;
+
+tipo ::= INT
+         {: RESULT = new TipoBasico("int"); :}
+       | BOOL
+         {: RESULT = new TipoBasico("bool"); :}
+       | VOID
+         {: RESULT = new TipoBasico("void"); :}
+       | ARRAY dimensiones:ds OF tipo:t
+         {: RESULT = new TipoArray(ds, t); :}
+       ;
+
+dimensiones ::= dimensiones:ds CORCHETE_APERTURA NUM:n CORCHETE_CIERRE
+                {: ds.add(Integer.parseInt(n.lexema)); RESULT = ds; :}
+              | CORCHETE_APERTURA NUM:n CORCHETE_CIERRE
+                {:
+                   List<Integer> l = new ArrayList<Integer>();
+                   l.add(Integer.parseInt(n.lexema));
+                   RESULT = l;
+                 :}
+              ;
+
+params_opt ::= lista_params:lp
+               {: RESULT = lp; :}
+             |
+               {: RESULT = new ArrayList<Parametro>(); :}
+             ;
+
+lista_params ::= lista_params:lp COMA param:p
+                 {: lp.add(p); RESULT = lp; :}
+               | param:p
+                 {:
+                    List<Parametro> l = new ArrayList<Parametro>();
+                    l.add(p);
+                    RESULT = l;
+                  :}
+               ;
+
+param ::= VAR tipo:t DOS_PUNTOS ID:id
+          {: RESULT = new Parametro(t, id.lexema, false); :}
+        | VAR tipo:t DOS_PUNTOS AMPERSAND ID:id
+          {: RESULT = new Parametro(t, id.lexema, true); :}
+        ;
+
+bloque ::= LLAVE_APERTURA lista_stmt:ls LLAVE_CIERRE
+           {: RESULT = new Bloque(ls); :}
+         ;
+
+lista_stmt ::= lista_stmt:ls stmt:s
+               {: ls.add(s); RESULT = ls; :}
+             |
+               {: RESULT = new ArrayList<Stmt>(); :}
+             ;
+
+asignacion ::= lhs:l IGUAL expr:e PUNTO_Y_COMA
+               {: RESULT = new Asignacion(l, e); :}
+             ;
+
+lhs ::= ID:id
+        {: RESULT = new Id(id.lexema); :}
+      | lhs:l CORCHETE_APERTURA expr:e CORCHETE_CIERRE
+        {: RESULT = new AccesoArray(l, e); :}
+      ;
+
+if_stmt ::= IF PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE bloque:b
+            {: RESULT = new If(e, b, null); :}
+          | IF PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE bloque:b1 ELSE bloque:b2
+            {: RESULT = new If(e, b1, b2); :}
+          ;
+
+while_stmt ::= WHILE PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE bloque:b
+               {: RESULT = new While(e, b); :}
+             ;
+
+read_stmt ::= READ PARENTESIS_APERTURA ID:id PARENTESIS_CIERRE PUNTO_Y_COMA
+              {: RESULT = new Read(id.lexema); :}
+            ;
+
+print_stmt ::= PRINT PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE PUNTO_Y_COMA
+               {: RESULT = new Print(e); :}
+             ;
+
+return_stmt ::= RETURN expr:e PUNTO_Y_COMA
+                {: RESULT = new Return(e); :}
+              | RETURN PUNTO_Y_COMA
+                {: RESULT = new Return(null); :}
+              ;
+
+/* Expresiones */
+
+expr ::= expr_or:e
+         {: RESULT = e; :}
+       ;
+
+expr_or ::= expr_or:e1 OR expr_and:e2
+            {: RESULT = new ExpBinaria(KindE.OR, e1, e2); :}
+          | expr_and:e
+            {: RESULT = e; :}
+          ;
+
+expr_and ::= expr_and:e1 AND expr_rel:e2
+             {: RESULT = new ExpBinaria(KindE.AND, e1, e2); :}
+           | expr_rel:e
+             {: RESULT = e; :}
+           ;
+
+expr_rel ::= expr_rel:e1 MENOR expr_add:e2
+             {: RESULT = new ExpBinaria(KindE.MENOR, e1, e2); :}
+           | expr_rel:e1 MAYOR expr_add:e2
+             {: RESULT = new ExpBinaria(KindE.MAYOR, e1, e2); :}
+           | expr_rel:e1 IGUALDAD expr_add:e2
+             {: RESULT = new ExpBinaria(KindE.IGUALDAD, e1, e2); :}
+           | expr_add:e
+             {: RESULT = e; :}
+           ;
+
+expr_add ::= expr_add:e1 SUMA expr_mul:e2
+             {: RESULT = new ExpBinaria(KindE.SUMA, e1, e2); :}
+           | expr_add:e1 RESTA expr_mul:e2
+             {: RESULT = new ExpBinaria(KindE.RESTA, e1, e2); :}
+           | expr_mul:e
+             {: RESULT = e; :}
+           ;
+
+expr_mul ::= expr_mul:e1 MULTIPLICACION expr_unaria:e2
+             {: RESULT = new ExpBinaria(KindE.MUL, e1, e2); :}
+           | expr_mul:e1 DIVISION expr_unaria:e2
+             {: RESULT = new ExpBinaria(KindE.DIV, e1, e2); :}
+           | expr_unaria:e
+             {: RESULT = e; :}
+           ;
+
+expr_unaria ::= RESTA expr_unaria:e
+                {: RESULT = new ExpUnaria(KindE.MENOS_UNARIO, e); :}
+              | expr_base:e
+                {: RESULT = e; :}
+              ;
+
+expr_base ::= NUM:n
+              {: RESULT = new Num(n.lexema); :}
+            | TRUE
+              {: RESULT = new Bool(true); :}
+            | FALSE
+              {: RESULT = new Bool(false); :}
+            | lhs:l
+              {: RESULT = l; :}
+            | ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE
+              {: RESULT = new LlamadaFuncion(id.lexema, as); :}
+            | PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE
+              {: RESULT = e; :}
+            ;
+
+args_opt ::= lista_args:la
+             {: RESULT = la; :}
+           |
+             {: RESULT = new ArrayList<E>(); :}
+           ;
+
+lista_args ::= lista_args:la COMA expr:e
+               {: la.add(e); RESULT = la; :}
+             | expr:e
+               {:
+                  List<E> l = new ArrayList<E>();
+                  l.add(e);
+                  RESULT = l;
+                :}
+             ;

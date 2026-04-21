@@ -1,0 +1,15 @@
+var array[3] of int : v;
+var int : x;
+
+func int : suma(var int : a, var int : b) {
+  return a + b;
+}
+
+v[0] = 10;
+v[1] = 20;
+v[2] = 30;
+
+x = suma(v[0], v[1]);
+
+print(x);
+print(v[2]);
