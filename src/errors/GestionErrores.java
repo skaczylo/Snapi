@@ -7,6 +7,11 @@ public class GestionErrores {
      System.out.println("ERROR fila "+fila+" columna "+columna+": Caracter inesperado: "+lexema); 
      System.exit(1);
    }  
+   public void errorSemantico(String mensaje) {
+     System.out.println("ERROR SEMANTICO: " + mensaje);
+     System.exit(1);
+   }
+
    public void errorSintactico(UnidadLexica unidadLexica) {
      if (unidadLexica.lexema() != null) {
        System.out.println("ERROR fila "+unidadLexica.fila()+" columna "+unidadLexica.columna()+": Elemento inesperado \""+unidadLexica.lexema()+"\"");
