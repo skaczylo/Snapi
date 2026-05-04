@@ -48,7 +48,14 @@ print(x);
   - `AnalizadorSemantico.java`: Recorre el AST comprobando compatibilidad de tipos, ámbitos, parámetros de llamadas y sentencias condicionales.
 
 - **`src/generadorcod/`** (Generación de Código)
-  - `GeneradorCodigo.java`: Genera código de tres direcciones (TAC) como representación intermedia a partir del AST. Resuelve arrays multidimensionales con cálculo de zancada (strides).
+  - `GeneradorCodigo.java`: Genera **código WebAssembly textual (`.wat`)** a partir del AST, siguiendo la teoría del tema (máquina virtual de pila):
+    - Funciones recursivas `codeE` (expresiones), `codeD` (direcciones de designadores) y `codeI` (instrucciones).
+    - Marcos de activación en memoria lineal con los registros virtuales `$MP` (mark pointer), `$SP` (stack pointer) y `$NP` (new pointer).
+    - Auxiliares `$reserveStack` y `$releaseStack` para entrar y salir de cada llamada.
+    - **Estructura del marco** (32 bits por celda): `[DL | parámetros | variables locales]`. El DL (enlace dinámico) almacena el `MP` del llamante.
+    - **Globales** colocadas al principio de la memoria lineal (offset `0..`).
+    - **Arrays multidimensionales** resueltos con cálculo de índice plano y *strides*.
+    - **Imports** de `$print` y `$read` desde el módulo `runtime`, que debe proporcionar el host (p. ej. JavaScript) en tiempo de carga.
 
 - **`src/errors/`** (Gestión de Errores)
   - `GestionErrores.java`: Centraliza el reporte de errores por consola y finaliza la compilación si hay fallos.
@@ -58,7 +65,7 @@ print(x);
 1. **Análisis Léxico (`AnalizadorLexico`)**: Lee el fichero fuente carácter a carácter y produce una secuencia de tokens (`UnidadLexica`).
 2. **Análisis Sintáctico (`ConstructorAST`)**: Aplica la gramática LR para verificar la estructura del programa y construye el AST.
 3. **Análisis Semántico (`AnalizadorSemantico`)**: Recorre el AST, gestiona la tabla de símbolos y comprueba la corrección de tipos. Detiene la compilación ante fallos.
-4. **Generación de Código (`GeneradorCodigo`)**: Recorre el AST ya validado y emite instrucciones TAC, independientes de la arquitectura de destino.
+4. **Generación de Código (`GeneradorCodigo`)**: Recorre el AST ya validado y emite código **WebAssembly textual (`.wat`)** para una máquina virtual de pila. El `.wat` resultante puede ensamblarse a binario con `wat2wasm` (del *WebAssembly Binary Toolkit*) y ejecutarse en cualquier navegador moderno o entorno Node.js que provea las funciones `runtime.print` y `runtime.read`.
 
 ## Ficheros de Prueba
 
@@ -67,21 +74,3 @@ print(x);
 - **`prueba3.txt`**: Bucle while con contador decreciente.
 - **`prueba4.txt`**: Array unidimensional, función con parámetros y llamada.
 
-## Compilación y Ejecución
-
-**Requisitos:** JDK, JFlex, CUP (`java_cup.jar`).
-
-```bash
-# 1. Generar el léxico
-jflex src/alex/AnalizadorLexico.flex
-
-# 2. Generar el parser
-cup src/constructorast/ConstructorAST.cup
-
-# 3. Compilar (ajustar classpath según la ubicación de los jars)
-javac -cp ".;java_cup.jar" -d bin src/**/*.java
-
-# 4. Ejecutar
-java -cp "bin;java_cup.jar" constructorast.Main prueba1.txt
-```
-*Nota: El programa imprimirá el AST, confirmará el análisis semántico y mostrará el código de 3 direcciones (TAC) generado.*

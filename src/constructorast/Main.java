@@ -20,17 +20,17 @@ public class Main {
         ConstructorAST constructorast = new ConstructorAST(alex);
         Programa programa = (Programa) constructorast.parse().value;
 
-        System.out.println("=== AST ===");
-        System.out.println(programa);
-        System.out.println();
+        System.err.println("=== AST ===");
+        System.err.println(programa);
+        System.err.println();
 
-        System.out.println("=== ANALISIS SEMANTICO ===");
+        System.err.println("=== ANALISIS SEMANTICO ===");
         AnalizadorSemantico semantico = new AnalizadorSemantico();
         semantico.analizar(programa);
-        System.out.println("OK - sin errores semanticos");
-        System.out.println();
+        System.err.println("OK - sin errores semanticos");
+        System.err.println();
 
-        System.out.println("=== CODIGO TAC GENERADO ===");
+        System.err.println("=== CODIGO TAC GENERADO ===");
         GeneradorCodigo generador = new GeneradorCodigo(semantico.getTipos());
         generador.genPrograma(programa);
         generador.imprimir();
