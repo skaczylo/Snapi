@@ -1,0 +1,431 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{xcolor} % Asegúrate de tener esto en el preámbulo
+\geometry{margin=2.5cm}
+
+
+
+% Definir el lenguaje Snapi
+\lstdefinelanguage{Snapi}{
+  morekeywords={var,func,class,if,then,else,elif,while,do,return,read,print,true,false,int,bool,ref,array,of,void},
+  sensitive=true,
+  morecomment=[l]{\#},      % comentarios con #
+  morestring=[b]"          % cadenas entre comillas dobles
+}
+
+% Configuración de lstlisting
+\lstset{
+  language=Snapi,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{green!60!black},  % comentarios en verde
+  stringstyle=\color{red},
+  showstringspaces=false,
+  frame=single,
+  backgroundcolor=\color{gray!10}, % fondo gris claro
+  breaklines=true,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  stepnumber=1,
+  numbersep=8pt
+}
+\title{\textbf{Procesadores de Lenguajes}\\ \textbf{Snapi}}
+\author{Pablo Peña Lozano, Adrian Carlos Skaczylo}
+\date{}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+
+%------------------------------------------------
+\section{Indentificadores y ámbitos de definición}
+
+\subsection{Comentarios}
+
+El lenguaje permitirá añadir comentarios de distintos tipos: comentarios de una linea y comentarios de lineas arbitrarias.
+Los comentarios del primer tipo se marcarán con el caracter \#, mientras que los del otro tipo  se delimitan mediante  /* ... */.
+
+\begin{lstlisting}
+# Comentario de una linea
+
+
+/*
+Comentario 
+de varias
+lineas
+*/
+\end{lstlisting}
+
+
+%------------------------------------------------------------------------
+%DECLARACION DE VARIABLES---------------------------------------------------%------------------------------------------------------------------------
+
+\subsection{Declaración de variables}
+El lenguaje permitirá declaración de variables y de arrays de cualquier tipo. La declaración de variables se indicarán con la palabra reservada \textbf{var}. El tipo de la variable aparece en primer lugar, seguido del símbolo \textbf{:} como separador y, a continuación, el identificador de la variable.
+
+\begin{lstlisting}
+var tipo : identificador;
+
+#Ejemplo
+var int : contador;
+\end{lstlisting}
+
+También se permitirá asignar un valor directamente a una variable en el momento de su declaración, siendo esta una funcionalidad opcional.
+
+\begin{lstlisting}
+var tipo : identificador = valor;
+
+#Ejemplo
+var int : contador = 1;
+\end{lstlisting}
+
+%------------------------------------------------------------------------
+%DECLARACION DE ARRAYS---------------------------------------------------%------------------------------------------------------------------------
+\subsection{Declaración de arrays}
+El lenguaje permitirá declarar arrays de cualquier tipo válido, en la declaración se permite añadir varias dimensiones para crear arrays multidimensionales.
+La sintaxis general sigue el mismo patrón que las variables simples, usando la palabra reservada \textbf{var}, pero para  indicar que se trata de un array se utiliza la palabra reservada \textbf{array} seguida de: corchetes con el tamaño; y el tipo, despues de la palabra reservada \textbf{of}.
+
+\begin{lstlisting}
+var array[size]...[size] of tipo : identificador;
+
+#Ejemplo
+var array[10] of int : lista;
+var array[3][2] of bool : lista2;
+\end{lstlisting}
+
+%Se permitirá, de manera opcional, asignar valores directamente a un array el momento de su declaración mediante el uso de corchetes:
+
+%\begin{lstlisting}
+%var tipo[size] : identificador = {v1, v2,...,v_size};
+
+%#Ejemplo
+%var int[10] : lista = {1,2,3,4,5,6,7,8,9,10};
+%\end{lstlisting}
+
+
+%------------------------------------------------------------------------
+%BLOQUES ANIDADOS--------------------------------------------------------%------------------------------------------------------------------------
+\subsection{Bloques anidados}
+
+El lenguaje permitirá el uso de bloques anidados, es decir, bloques de código que se encuentran dentro de otros bloques.  
+Cada bloque se delimita mediante llaves \textbf{\{ \}}, y puede contener declaraciones de variables, instrucciones y otros bloques internos. No se permite, sin embargo, la declaración de funciones dentro de bloques, estas habrán de hacerse a nivel global.  
+
+\begin{lstlisting}
+{
+    var x : int;  # x existe solo en este bloque
+
+    {
+        var y : bool;  
+        var z : int;
+    }
+
+    # Aqui solo se puede usar x, y no existe la y bool ni z
+}
+\end{lstlisting}
+
+Cada bloque maneja su propia tabla de símbolos, lo que facilita la gestión de ámbitos y la detección de errores de declaración.
+
+
+
+%------------------------------------------------------------------------
+%FUNCIONES --------------------------------------------------------%------------------------------------------------------------------------
+\subsection{Funciones y paso de parámetros}
+
+El lenguaje permitirá definir funciones con paso de parámetros por valor y por referencia.  
+Cada función se declara usando la palabra reservada \textbf{func}, seguida del tipo, el nombre de la función y los parámetros entre paréntesis. Se reservará la palabra \textbf{return} para indicar el resultado que devuelve la función.
+
+\begin{lstlisting}
+func tipo : nombre(var tipo1 : param1, var tipo2 : param2,...){
+    #Cuerpo de la funcion
+}
+
+
+#Ejemplo
+
+func int : suma( var int : x, var int: y){
+
+    var int : resultado;
+    resultado = x + y;
+
+    return resultado;
+}
+\end{lstlisting}
+
+
+
+Los parámetros se pasan por valor por defecto, y se pasan por referencia utilizando el símbolo \textbf{\&} antes del identificador del parámetro. Se podrán combinar ambos tipos de parámetros.
+
+
+
+\begin{lstlisting}
+func tipo : nombre(var tipo1 : &param1, var tipo2 : param2,...){
+    #Cuerpo de la funcion
+}
+
+
+#Ejemplo
+
+func int : suma( var int : &x, var int: y){
+
+    var int : resultado;
+    resultado = x + y;
+    x = x +1;
+
+    return resultado;
+}
+\end{lstlisting}
+
+Los procedicimientos tendrán por tipo la palabra reservada \textbf{void} y seguirán la misma estructura que las funciones:
+
+\begin{lstlisting}
+func void : nombre(var tipo1 : &param1, var tipo2 : param2,...){
+    #Cuerpo del procedimiento
+}
+
+
+#Ejemplo
+func void : swap( var int : &x, var int: &y){
+
+    var int : z = x;
+    x = y;
+    y = z;
+}
+\end{lstlisting}
+
+
+
+%------------------------------------------------------------------------
+%TIPOS --------------------------------------------------------
+%------------------------------------------------------------------------
+
+\section{Tipos}
+
+\subsection{Tipos Básicos}
+
+El lenguaje implementa un sistema de tipos estático y explícito, en el que cada variable debe declararse con su tipo correspondiente.  
+Los tipos básicos predefinidos son:
+
+\begin{itemize}
+    \item \textbf{int} : enteros
+    \item \textbf{bool} : booleanos
+\end{itemize}
+
+Se soportan operadores infijos sobre estos tipos, con prioridades y asociatividades definidas:
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+Operador & Tipo de operandos & Asociatividad \\
+\hline
+$*$, $/$ & int, int & izquierda \\
+$+$, $-$ & int, int & izquierda \\
+$<$, $>$, $==$ & int, int & no asociativo \\
+\textbf{and}, \textbf{or} & bool, bool & izquierda \\
+\hline
+\end{tabular}
+\end{center}
+
+
+
+
+%------------------------------------------------------------------------
+%TIPOS DE USUARIO--------------------------------------------------------
+%------------------------------------------------------------------------
+%\subsection{Tipos de Usuario}
+
+%El lenguaje permitirá la creación de tipos por parte del usuario mediante la construcción \textbf{struct}.  
+%La sintaxis general será la siguiente:
+
+%\begin{lstlisting}
+%struct identificador {
+%    # atributos del struct
+%    var tipo : atributo1;
+%    var tipo : atributo2;
+%    ...
+%};
+%\end{lstlisting}
+
+%Los atributos se definen dentro de las llaves \textbf{\{ \}} y pueden ser de cualquier tipo válido del lenguaje, incluyendo arrays o incluso otros \texttt{structs}.  
+%La declaración termina siempre con un punto y coma (\textbf{;}) para diferenciarla de una función que devuelva una estructura.  
+%El acceso a los atributos de una instancia se realiza mediante el operador punto (\textbf{.}).
+
+
+%\begin{lstlisting}
+%struct Persona {
+%    var int : edad;
+%    var bool : activo;
+%    array int[3] : notas;
+%};
+
+%# Declaracion de una variable de tipo Persona
+%var Persona : alumno;
+
+%# Acceso a los atributos
+%alumno.edad = 20;
+%alumno.activo = true;
+%alumno.notas[0] = 8;
+%\end{lstlisting}
+
+
+%------------------------------------------------------------------------
+%INSTRUCCIONES --------------------------------------------------------
+%------------------------------------------------------------------------
+
+\section{Conjunto de instrucciones del lenguaje}
+
+\subsection{Asignación}
+
+El lenguaje permite realizar asignaciones a variables simples y a posiciones específicas de arrays.  
+La sintaxis general es:
+
+\begin{lstlisting}
+identificador = expresion;
+identificador[indice] = expresion;  # para arrays
+
+#Ejemplo
+var int : x;
+var array[5] of int : numeros;
+
+x = 10;            # asignacion a variable simple
+numeros[2] = 7;    # asignacion a un elemento del array
+\end{lstlisting}
+
+
+
+%------------------------------------------------------------------------
+%CONDICIONALES --------------------------------------------------------
+%------------------------------------------------------------------------
+\subsection{Condicionales}
+
+El lenguaje soporta condicionales con una o dos ramas, utilizando la palabra reservada \textbf{if} y \textbf{else}.  
+La sintaxis general es:
+
+\begin{lstlisting}
+if(condicion){
+    # instrucciones si la condicion es verdadera
+} 
+else {
+    # instrucciones si la condicion es falsa (opcional)
+}
+
+#Ejemplo
+
+var int : x = 5;
+
+if (x > 0) {
+    print(x);
+} else {
+    print(0);
+}
+
+\end{lstlisting}
+
+
+%------------------------------------------------------
+%BUCLES
+%------------------------------------------------------------------------
+
+\subsection{Bucles}
+
+El lenguaje  permitirá el uso de estructuras de repeticion mediante bucles \textbf{while}. Este ejecuta un bloque de sentencias delimitado por llaves \textbf{\{ \}}.
+
+%\subsubsection{Bucle \texttt{for}}
+
+%La sintaxis del bucle \textbf{for} es la siguiente:
+
+%\begin{lstlisting}
+%for (inicializacion; condicion; actualizacion){
+%    # Bloque de sentencias
+%}
+
+
+%#Ejemplo
+
+%for(var int : i = 0; i < 5; i = i + 1){
+%    print(i);
+%}
+%\end{lstlisting}
+
+\subsubsection{Bucle \texttt{while}}
+
+La sintaxis del bucle \textbf{while} es la siguiente:
+
+\begin{lstlisting}
+while(condicion){
+    # Bloque de sentencias
+}
+
+#Ejemplo
+
+var int : i = 0;
+
+while (i < 5) {
+    print(i);
+    i = i + 1;
+}
+\end{lstlisting}
+
+%------------------------------------------------------
+%LECTURA Y ESCRITURA
+%------------------------------------------------------
+\subsection{Lectura y escritura}
+
+El lenguaje incluirá instrucciones para lectura y escritura de enteros:
+
+\begin{lstlisting}
+read(identificador);      # lee un valor desde la entrada
+print(expresion);         # imprime un valor
+
+#Ejemplo
+var int : edad;
+read(edad);
+print(edad);
+\end{lstlisting}
+
+
+
+\subsection{Expresiones}
+
+Las expresiones pueden estar formadas por:
+
+\begin{itemize}
+    \item Constantes y literales
+    \item Identificadores simples o con subíndices (arrays)
+    \item Operadores infijos con prioridades definidas
+    \item Llamadas a funciones
+\end{itemize}
+
+
+\begin{lstlisting}
+var int : a = 5;
+var int : b = 3;
+var array[5] of int : numeros;
+
+numeros[0] = a + b * 2;      # expresion con operadores infijos
+var int : resultado = sumar(a, &b);  # llamada a funcion
+\end{lstlisting}
+
+%------------------------------------------------------
+%LGestion de errores
+%------------------------------------------------------
+
+\section{Gestión de errores}
+
+En caso de producirse un error durante la compilación, se indicará el tipo de error detectado junto con la fila y la columna en la que se ha producido. Tras detectar un error, el proceso de compilación no se detendrá inmediatamente, sino que se aplicarán mecanismos básicos de recuperación con el objetivo de continuar el análisis y detectar el mayor número posible de errores en una misma ejecución. Una vez finalizado el análisis, si se ha producido algún error, la compilación se considerará fallida.
+
+
+
+
+\end{document}

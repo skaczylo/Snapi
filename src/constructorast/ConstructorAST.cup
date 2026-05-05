@@ -38,6 +38,7 @@ terminal TRUE, FALSE;
 terminal SUMA, RESTA, MULTIPLICACION, DIVISION;
 terminal MENOR, MAYOR, IGUALDAD, AND, OR;
 terminal IF, ELSE, WHILE, READ, PRINT;
+terminal CLASS, NEW, PUNTO;
 terminal alex.TokenValue ID, NUM, NUM_REAL;
 
 /* No terminales tipados */
@@ -51,6 +52,8 @@ non terminal List<Stmt> lista_stmt;
 
 non terminal DecVar declaracion_variable;
 non terminal DecFuncion declaracion_funcion;
+non terminal DecClase declaracion_clase;
+non terminal List<I> lista_miembros;
 
 non terminal T tipo;
 non terminal List<Integer> dimensiones;
@@ -59,6 +62,7 @@ non terminal List<Parametro> params_opt, lista_params;
 non terminal Parametro param;
 
 non terminal Asignacion asignacion;
+non terminal LlamadaStmt llamada_stmt;
 non terminal E lhs;
 
 non terminal If if_stmt;
@@ -92,6 +96,8 @@ lista_inst ::= lista_inst:li inst:i
 
 inst ::= declaracion_funcion:f
          {: RESULT = f; :}
+       | declaracion_clase:c
+         {: RESULT = c; :}
        | stmt:s
          {: RESULT = s; :}
        ;
@@ -110,6 +116,8 @@ stmt ::= declaracion_variable:d
          {: RESULT = b; :}
        | asignacion:a
          {: RESULT = a; :}
+       | llamada_stmt:c
+         {: RESULT = c; :}
        | return_stmt:r
          {: RESULT = r; :}
        ;
@@ -125,6 +133,26 @@ declaracion_funcion ::= FUNC tipo:t DOS_PUNTOS ID:id
                         {: RESULT = new DecFuncion(t, id.lexema, ps, b); :}
                       ;
 
+declaracion_clase ::= CLASS DOS_PUNTOS ID:id LLAVE_APERTURA lista_miembros:lm LLAVE_CIERRE
+                      {:
+                         java.util.List<DecVar> campos = new ArrayList<DecVar>();
+                         java.util.List<DecFuncion> metodos = new ArrayList<DecFuncion>();
+                         for (I m : lm) {
+                            if (m instanceof DecVar) campos.add((DecVar) m);
+                            else if (m instanceof DecFuncion) metodos.add((DecFuncion) m);
+                         }
+                         RESULT = new DecClase(id.lexema, campos, metodos);
+                      :}
+                    ;
+
+lista_miembros ::= lista_miembros:lm declaracion_variable:d
+                   {: lm.add(d); RESULT = lm; :}
+                 | lista_miembros:lm declaracion_funcion:f
+                   {: lm.add(f); RESULT = lm; :}
+                 |
+                   {: RESULT = new ArrayList<I>(); :}
+                 ;
+
 tipo ::= INT
          {: RESULT = new TipoBasico("int"); :}
        | REAL
@@ -135,6 +163,8 @@ tipo ::= INT
          {: RESULT = new TipoBasico("void"); :}
        | ARRAY dimensiones:ds OF tipo:t
          {: RESULT = new TipoArray(ds, t); :}
+       | ID:id
+         {: RESULT = new TipoClase(id.lexema); :}
        ;
 
 dimensiones ::= dimensiones:ds CORCHETE_APERTURA NUM:n CORCHETE_CIERRE
@@ -183,10 +213,18 @@ asignacion ::= lhs:l IGUAL expr:e PUNTO_Y_COMA
                {: RESULT = new Asignacion(l, e); :}
              ;
 
+llamada_stmt ::= ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE PUNTO_Y_COMA
+                 {: RESULT = new LlamadaStmt(new LlamadaFuncion(id.lexema, as)); :}
+               | lhs:l PUNTO ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE PUNTO_Y_COMA
+                 {: RESULT = new LlamadaStmt(new LlamadaMetodo(l, id.lexema, as)); :}
+               ;
+
 lhs ::= ID:id
         {: RESULT = new Id(id.lexema); :}
       | lhs:l CORCHETE_APERTURA expr:e CORCHETE_CIERRE
         {: RESULT = new AccesoArray(l, e); :}
+      | lhs:l PUNTO ID:id
+        {: RESULT = new AccesoCampo(l, id.lexema); :}
       ;
 
 if_stmt ::= IF PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE bloque:b
@@ -275,6 +313,10 @@ expr_base ::= NUM:n
               {: RESULT = l; :}
             | ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE
               {: RESULT = new LlamadaFuncion(id.lexema, as); :}
+            | lhs:l PUNTO ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE
+              {: RESULT = new LlamadaMetodo(l, id.lexema, as); :}
+            | NEW ID:id PARENTESIS_APERTURA args_opt:as PARENTESIS_CIERRE
+              {: RESULT = new NewInstancia(id.lexema, as); :}
             | PARENTESIS_APERTURA expr:e PARENTESIS_CIERRE
               {: RESULT = e; :}
             ;

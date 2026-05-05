@@ -26,10 +26,14 @@ public class GeneradorCodigo {
     // Funciones: nombre -> metadatos
     private final Map<String, FuncInfo> funciones = new LinkedHashMap<>();
 
+    // Clases: nombre -> metadatos (campos y metodos)
+    private final Map<String, ClaseInfo> clases = new LinkedHashMap<>();
+
     // Estado local durante la generación de funciones
     private boolean enFuncion = false;
     private final Deque<Map<String, VarInfo>> pilaAmbitos = new ArrayDeque<>();
     private int sigOffsetLocal;
+    private String claseActualGen = null; // Nombre de la clase del metodo en curso
 
     public GeneradorCodigo(Map<E, T> tipos) {
         this.tipos = tipos;
@@ -45,6 +49,14 @@ public class GeneradorCodigo {
     private static class FuncInfo {
         List<Parametro> parametros;
         int frameSize;
+        boolean tieneThis; // true para metodos
+    }
+
+    private static class ClaseInfo {
+        String nombre;
+        Map<String, VarInfo> campos = new LinkedHashMap<>();
+        int tamanoBytes;
+        boolean tieneInit;
     }
 
     // ---------------------------------------------------------------
@@ -65,12 +77,41 @@ public class GeneradorCodigo {
                 DecFuncion fn = (DecFuncion) inst;
                 FuncInfo fi = new FuncInfo();
                 fi.parametros = fn.parametros();
-                fi.frameSize  = calcularFrameSize(fn);
+                fi.frameSize  = calcularFrameSize(fn, false);
+                fi.tieneThis  = false;
                 funciones.put(fn.nombre(), fi);
+            } else if (inst instanceof DecClase) {
+                recolectarClase((DecClase) inst);
             } else {
                 recolectarGlobales((Stmt) inst);
             }
         }
+    }
+
+    /** Calcula layout de campos de una clase y registra metodos como funciones. */
+    private void recolectarClase(DecClase dc) {
+        ClaseInfo ci = new ClaseInfo();
+        ci.nombre = dc.nombre();
+        int off = 0;
+        for (DecVar campo : dc.campos()) {
+            VarInfo vi = new VarInfo();
+            vi.offset    = off;
+            vi.sizeBytes = tamanoEnBytes(campo.tipo());
+            vi.tipo      = campo.tipo();
+            ci.campos.put(campo.nombre(), vi);
+            off += vi.sizeBytes;
+        }
+        ci.tamanoBytes = off;
+        ci.tieneInit = false;
+        for (DecFuncion m : dc.metodos()) {
+            if (m.nombre().equals("init")) ci.tieneInit = true;
+            FuncInfo fi = new FuncInfo();
+            fi.parametros = m.parametros();
+            fi.frameSize  = calcularFrameSize(m, true);
+            fi.tieneThis  = true;
+            funciones.put(dc.nombre() + "$" + m.nombre(), fi);
+        }
+        clases.put(dc.nombre(), ci);
     }
 
     private void recolectarGlobales(Stmt s) {
@@ -102,12 +143,14 @@ public class GeneradorCodigo {
             for (int d : arr.dimensiones()) total *= d;
             return total * CELL_BYTES;
         }
-        return CELL_BYTES; // int / bool / void (void no se almacena, pero da igual)
+        // int / bool / void / real / clase (referencia por puntero) -> 4 bytes
+        return CELL_BYTES;
     }
 
-    /** Tamano del marco = cabecera + parametros + maximo solapamiento de locales. */
-    private int calcularFrameSize(DecFuncion fn) {
+    /** Tamano del marco = cabecera + (this si es metodo) + parametros + maximo solapamiento de locales. */
+    private int calcularFrameSize(DecFuncion fn, boolean esMetodo) {
         int base = FRAME_HEADER;
+        if (esMetodo) base += CELL_BYTES; // slot para $this (i32)
         for (Parametro p : fn.parametros()) {
             base += p.esReferencia() ? CELL_BYTES : tamanoEnBytes(p.tipo());
         }
@@ -167,6 +210,8 @@ public class GeneradorCodigo {
         for (I inst : p.instrucciones()) {
             if (inst instanceof DecFuncion) {
                 generarFuncion((DecFuncion) inst);
+            } else if (inst instanceof DecClase) {
+                generarClase((DecClase) inst);
             }
         }
 
@@ -218,9 +263,10 @@ public class GeneradorCodigo {
 
     private void generarMain(Programa p) {
         sb.append("  (func $_main\n");
+        sb.append("    (local $newptr i32)\n");
         enFuncion = false;
         for (I inst : p.instrucciones()) {
-            if (!(inst instanceof DecFuncion)) {
+            if (!(inst instanceof DecFuncion) && !(inst instanceof DecClase)) {
                 genStmt((Stmt) inst);
             }
         }
@@ -232,9 +278,29 @@ public class GeneradorCodigo {
     // ---------------------------------------------------------------
 
     private void generarFuncion(DecFuncion fn) {
-        FuncInfo fi = funciones.get(fn.nombre());
+        generarFuncionOMetodo(fn, null);
+    }
 
-        sb.append("  (func $").append(fn.nombre());
+    private void generarClase(DecClase dc) {
+        for (DecFuncion m : dc.metodos()) {
+            generarFuncionOMetodo(m, dc.nombre());
+        }
+    }
+
+    /**
+     * Genera codigo WAT para una funcion o metodo.
+     * Si claseDuena != null se trata de un metodo y se inyecta un parametro
+     * implicito $this (i32) al principio del marco.
+     */
+    private void generarFuncionOMetodo(DecFuncion fn, String claseDuena) {
+        boolean esMetodo = (claseDuena != null);
+        String nombreWat = esMetodo ? (claseDuena + "$" + fn.nombre()) : fn.nombre();
+        FuncInfo fi = funciones.get(nombreWat);
+
+        sb.append("  (func $").append(nombreWat);
+        if (esMetodo) {
+            sb.append(" (param $this i32)");
+        }
         for (Parametro p : fn.parametros()) {
             String wasmTy = (!p.esReferencia() && esReal(p.tipo())) ? "f32" : "i32";
             sb.append(" (param $").append(p.nombre()).append(" ").append(wasmTy).append(")");
@@ -243,6 +309,8 @@ public class GeneradorCodigo {
             sb.append(esReal(fn.tipoRetorno()) ? " (result f32)" : " (result i32)");
         }
         sb.append("\n");
+        // Local auxiliar para guardar la direccion de instancias creadas con new.
+        sb.append("    (local $newptr i32)\n");
 
         // 1. Reservar marco
         sb.append("    i32.const ").append(fi.frameSize).append("\n");
@@ -250,12 +318,22 @@ public class GeneradorCodigo {
 
         // 2. Inicializar estado de generacion
         enFuncion = true;
+        claseActualGen = claseDuena;
         pilaAmbitos.clear();
         pilaAmbitos.push(new LinkedHashMap<>());
         sigOffsetLocal = FRAME_HEADER;
 
-        // 3. Copiar parametros wasm a memoria (siguiendo la convencion uniforme:
-        //    todas las variables se direccionan via memoria).
+        // 3a. Si es metodo, copiar $this al primer slot del marco
+        if (esMetodo) {
+            sb.append("    global.get $MP\n");
+            sb.append("    i32.const ").append(sigOffsetLocal).append("\n");
+            sb.append("    i32.add\n");
+            sb.append("    local.get $this\n");
+            sb.append("    i32.store\n");
+            sigOffsetLocal += CELL_BYTES;
+        }
+
+        // 3b. Copiar parametros wasm a memoria.
         for (Parametro p : fn.parametros()) {
             VarInfo info = new VarInfo();
             info.offset     = sigOffsetLocal;
@@ -269,8 +347,6 @@ public class GeneradorCodigo {
             sb.append("    i32.const ").append(info.offset).append("\n");
             sb.append("    i32.add\n");
             sb.append("    local.get $").append(p.nombre()).append("\n");
-            // Las referencias siempre son punteros (i32). Para parámetros por valor
-            // de tipo real, el wasm trae un f32 en el local y debe almacenarse f32.
             if (!p.esReferencia() && esReal(p.tipo())) {
                 sb.append("    f32.store\n");
             } else {
@@ -287,14 +363,12 @@ public class GeneradorCodigo {
         if (esVoid(fn.tipoRetorno())) {
             sb.append("    call $releaseStack\n");
         } else {
-            // Una funcion no-void debe terminar siempre con return explicito;
-            // si llegamos aqui es codigo muerto. unreachable satisface al
-            // validador de wasm respecto al tipo de resultado.
             sb.append("    unreachable\n");
         }
 
         sb.append("  )\n\n");
         enFuncion = false;
+        claseActualGen = null;
         pilaAmbitos.clear();
     }
 
@@ -304,15 +378,34 @@ public class GeneradorCodigo {
 
     private void genStmt(Stmt s) {
         switch (s.nodeKind()) {
-            case DEC_VAR:    genDecVar((DecVar) s);          break;
-            case ASIGNACION: genAsig((Asignacion) s);        break;
-            case BLOQUE:     genBloque((Bloque) s);          break;
-            case IF:         genIf((If) s);                  break;
-            case WHILE:      genWhile((While) s);            break;
-            case READ:       genRead((Read) s);              break;
-            case PRINT:      genPrint((Print) s);            break;
-            case RETURN:     genReturn((Return) s);          break;
+            case DEC_VAR:      genDecVar((DecVar) s);                       break;
+            case ASIGNACION:   genAsig((Asignacion) s);                     break;
+            case BLOQUE:       genBloque((Bloque) s);                       break;
+            case IF:           genIf((If) s);                               break;
+            case WHILE:        genWhile((While) s);                         break;
+            case READ:         genRead((Read) s);                           break;
+            case PRINT:        genPrint((Print) s);                         break;
+            case RETURN:       genReturn((Return) s);                       break;
+            case LLAMADA_STMT: genLlamadaStmt((LlamadaStmt) s);             break;
             default: break;
+        }
+    }
+
+    /**
+     * Llamada (a funcion o metodo) usada como sentencia: descarta el resultado
+     * si la funcion devuelve algo (drop), o no emite drop si es void.
+     */
+    private void genLlamadaStmt(LlamadaStmt s) {
+        E call = s.llamada();
+        if (call instanceof LlamadaFuncion) {
+            genLlamada((LlamadaFuncion) call);
+        } else if (call instanceof LlamadaMetodo) {
+            genLlamadaMetodo((LlamadaMetodo) call);
+        }
+        // Si la llamada deja un valor en la pila, descartarlo (void no deja nada)
+        T tipoRet = tipos.get(call);
+        if (tipoRet != null && !esVoid(tipoRet)) {
+            sb.append("    drop\n");
         }
     }
 
@@ -380,15 +473,25 @@ public class GeneradorCodigo {
     private void genRead(Read r) {
         // codeD(x); call $read|$readReal; store
         emitDireccionId(r.nombre());
-        VarInfo info = buscarLocal(r.nombre());
-        if (info == null) info = globales.get(r.nombre());
-        if (esReal(info.tipo)) {
+        T tipo = tipoDeVar(r.nombre());
+        if (esReal(tipo)) {
             sb.append("    call $readReal\n");
             sb.append("    f32.store\n");
         } else {
             sb.append("    call $read\n");
             sb.append("    i32.store\n");
         }
+    }
+
+    /** Tipo de un identificador resolviendo local, campo de clase actual o global. */
+    private T tipoDeVar(String nombre) {
+        VarInfo info = buscarLocal(nombre);
+        if (info != null) return info.tipo;
+        if (esCampoDeClaseActual(nombre)) {
+            return clases.get(claseActualGen).campos.get(nombre).tipo;
+        }
+        VarInfo g = globales.get(nombre);
+        return g != null ? g.tipo : null;
     }
 
     private void genPrint(Print p) {
@@ -421,6 +524,7 @@ public class GeneradorCodigo {
                 break;
             case ID:
             case ACCESO_ARRAY:
+            case ACCESO_CAMPO:
                 // codeD(designador); load (f32 si es real, i32 en otro caso)
                 genDireccion(e);
                 sb.append(esRealExpr(e) ? "    f32.load\n" : "    i32.load\n");
@@ -475,8 +579,65 @@ public class GeneradorCodigo {
             case LLAMADA_FUNCION:
                 genLlamada((LlamadaFuncion) e);
                 break;
+            case LLAMADA_METODO:
+                genLlamadaMetodo((LlamadaMetodo) e);
+                break;
+            case NEW_INSTANCIA:
+                genNew((NewInstancia) e);
+                break;
             default: break;
         }
+    }
+
+    /** obj.metodo(args): codeE(obj) (this); args; call $Clase$metodo */
+    private void genLlamadaMetodo(LlamadaMetodo lm) {
+        T tipoObj = tipos.get(lm.objeto());
+        if (!(tipoObj instanceof TipoClase)) return;
+        String clase = ((TipoClase) tipoObj).nombre();
+        FuncInfo fi = funciones.get(clase + "$" + lm.metodo());
+        // Pasar this (puntero al objeto)
+        genExpr(lm.objeto());
+        // Pasar argumentos respetando referencia/valor
+        List<Parametro> params = fi.parametros;
+        for (int i = 0; i < lm.args().size(); i++) {
+            E arg = lm.args().get(i);
+            if (params.get(i).esReferencia()) genDireccion(arg);
+            else                              genExpr(arg);
+        }
+        sb.append("    call $").append(clase).append("$").append(lm.metodo()).append("\n");
+    }
+
+    /**
+     * new ClassName(args): asigna sizeof(ClassName) bytes desde $NP (heap),
+     * guarda la direccion en $newptr, llama a init si existe y deja la
+     * direccion de la nueva instancia en la pila como resultado.
+     */
+    private void genNew(NewInstancia ni) {
+        ClaseInfo ci = clases.get(ni.nombreClase());
+        // 1. Reservar memoria en el heap: $NP -= tamano
+        sb.append("    global.get $NP\n");
+        sb.append("    i32.const ").append(ci.tamanoBytes).append("\n");
+        sb.append("    i32.sub\n");
+        sb.append("    global.set $NP\n");
+        // 2. Guardar la direccion en $newptr
+        sb.append("    global.get $NP\n");
+        sb.append("    local.set $newptr\n");
+        // 3. Llamar a init si existe
+        if (ci.tieneInit) {
+            FuncInfo fi = funciones.get(ni.nombreClase() + "$init");
+            // this
+            sb.append("    local.get $newptr\n");
+            // args
+            List<Parametro> params = fi.parametros;
+            for (int i = 0; i < ni.args().size(); i++) {
+                E arg = ni.args().get(i);
+                if (params.get(i).esReferencia()) genDireccion(arg);
+                else                              genExpr(arg);
+            }
+            sb.append("    call $").append(ni.nombreClase()).append("$init\n");
+        }
+        // 4. Resultado: la direccion de la instancia
+        sb.append("    local.get $newptr\n");
     }
 
     private void genLlamada(LlamadaFuncion lf) {
@@ -504,7 +665,21 @@ public class GeneradorCodigo {
             emitDireccionId(((Id) e).nombre());
         } else if (e instanceof AccesoArray) {
             genDireccionAcceso((AccesoArray) e);
+        } else if (e instanceof AccesoCampo) {
+            genDireccionCampo((AccesoCampo) e);
         }
+    }
+
+    /** Direccion de obj.campo: codeE(obj) + offset_campo (el valor de obj es el puntero). */
+    private void genDireccionCampo(AccesoCampo ac) {
+        T tipoObj = tipos.get(ac.objeto());
+        if (!(tipoObj instanceof TipoClase)) return;
+        ClaseInfo ci = clases.get(((TipoClase) tipoObj).nombre());
+        VarInfo vi = ci.campos.get(ac.campo());
+        // Cargar el valor del puntero al objeto (no su direccion):
+        genExpr(ac.objeto());
+        sb.append("    i32.const ").append(vi.offset).append("\n");
+        sb.append("    i32.add\n");
     }
 
     private void emitDireccionId(String nombre) {
@@ -518,11 +693,35 @@ public class GeneradorCodigo {
                 // El slot contiene la direccion de la variable original
                 sb.append("    i32.load\n");
             }
+        } else if (esCampoDeClaseActual(nombre)) {
+            // Campo de la clase actual: this implicito
+            emitDireccionThisCampo(nombre);
         } else {
             // Variable global (offset absoluto desde 0)
             VarInfo g = globales.get(nombre);
             sb.append("    i32.const ").append(g.offset).append("\n");
         }
+    }
+
+    /** True si nombre es un campo de la clase del metodo en curso. */
+    private boolean esCampoDeClaseActual(String nombre) {
+        if (claseActualGen == null) return false;
+        ClaseInfo ci = clases.get(claseActualGen);
+        return ci != null && ci.campos.containsKey(nombre);
+    }
+
+    /** Emite la direccion de this.campo (this esta en el frame en FRAME_HEADER). */
+    private void emitDireccionThisCampo(String campo) {
+        ClaseInfo ci = clases.get(claseActualGen);
+        VarInfo vi = ci.campos.get(campo);
+        // Cargar el valor de $this desde el frame
+        sb.append("    global.get $MP\n");
+        sb.append("    i32.const ").append(FRAME_HEADER).append("\n");
+        sb.append("    i32.add\n");
+        sb.append("    i32.load\n");
+        // Sumar offset del campo
+        sb.append("    i32.const ").append(vi.offset).append("\n");
+        sb.append("    i32.add\n");
     }
 
     private VarInfo buscarLocal(String nombre) {

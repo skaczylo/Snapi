@@ -84,6 +84,10 @@ while = while
 read = read
 print = print
 
+class = class
+new = new
+punto = \.
+
 %%
 {separador}               {}
 {comentario}              {}
@@ -129,6 +133,9 @@ print = print
 {read}                    { return ops.unidad(ClaseLexica.READ); }
 {print}                   { return ops.unidad(ClaseLexica.PRINT); }
 {return}                  { return ops.unidad(ClaseLexica.RETURN); }
+{class}                   { return ops.unidad(ClaseLexica.CLASS); }
+{new}                     { return ops.unidad(ClaseLexica.NEW); }
+{punto}                   { return ops.unidad(ClaseLexica.PUNTO); }
 
 {numeroReal}              { return ops.unidad(ClaseLexica.NUM_REAL, lexema()); }
 {numeroEntero}            { return ops.unidad(ClaseLexica.NUM, lexema()); }

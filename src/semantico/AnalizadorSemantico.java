@@ -12,14 +12,18 @@ public class AnalizadorSemantico {
     private GestionErrores errores;
     private T tipoRetornoActual; // Para validar sentencias return
     private Map<E, T> tipos;     // Anotaciones de tipos para el generador
+    private Map<String, InfoClase> clases; // Clases declaradas en el programa
+    private InfoClase claseActual; // Clase del metodo en curso (null si fuera de metodo)
 
     public AnalizadorSemantico() {
         this.tabla = new TablaSimbolos();
         this.errores = new GestionErrores();
         this.tipos = new IdentityHashMap<>();
+        this.clases = new LinkedHashMap<>();
     }
 
     public Map<E, T> getTipos() { return tipos; }
+    public Map<String, InfoClase> getClases() { return clases; }
 
     /**
      * Inicia el análisis del programa.
@@ -33,9 +37,84 @@ public class AnalizadorSemantico {
     private void analizarInstruccion(I inst) {
         if (inst instanceof DecFuncion) {
             analizarDecFuncion((DecFuncion) inst);
+        } else if (inst instanceof DecClase) {
+            analizarDecClase((DecClase) inst);
         } else {
             analizarStmt((Stmt) inst);
         }
+    }
+
+    /**
+     * Analiza una declaracion de clase: registra la clase con sus campos y
+     * metodos, y luego analiza cada metodo abriendo un ambito que expone los
+     * campos como variables (this implicito) y los parametros del metodo.
+     */
+    private void analizarDecClase(DecClase dc) {
+        if (clases.containsKey(dc.nombre()) || tabla.estaDeclaradoLocal(dc.nombre())) {
+            errores.errorSemantico("La clase '" + dc.nombre() + "' ya ha sido declarada");
+        }
+        InfoClase info = new InfoClase(dc.nombre(), dc.campos(), dc.metodos());
+        clases.put(dc.nombre(), info);
+
+        // Comprobar duplicados en campos
+        java.util.Set<String> nombresCampos = new java.util.HashSet<>();
+        for (DecVar c : dc.campos()) {
+            if (!nombresCampos.add(c.nombre())) {
+                errores.errorSemantico("Campo duplicado '" + c.nombre()
+                    + "' en la clase '" + dc.nombre() + "'");
+            }
+            // Los campos no admiten inicializador (la inicializacion va en init)
+            if (c.tieneInit()) {
+                errores.errorSemantico("Los campos no pueden tener inicializador: '"
+                    + c.nombre() + "'");
+            }
+        }
+
+        // Comprobar duplicados en metodos y analizarlos
+        java.util.Set<String> nombresMetodos = new java.util.HashSet<>();
+        for (DecFuncion m : dc.metodos()) {
+            if (!nombresMetodos.add(m.nombre())) {
+                errores.errorSemantico("Metodo duplicado '" + m.nombre()
+                    + "' en la clase '" + dc.nombre() + "'");
+            }
+            analizarMetodo(info, m);
+        }
+    }
+
+    /**
+     * Analiza un metodo dentro del contexto de una clase: abre un ambito que
+     * expone primero los campos (this implicito) y despues los parametros y
+     * el cuerpo, igual que en analizarDecFuncion.
+     */
+    private void analizarMetodo(InfoClase clase, DecFuncion m) {
+        InfoClase claseAnt = claseActual;
+        claseActual = clase;
+        T tipoRetAnt = tipoRetornoActual;
+        tipoRetornoActual = m.tipoRetorno();
+
+        // Ambito para campos (this implicito)
+        tabla.abrirAmbito();
+        for (Map.Entry<String, InfoVariable> e : clase.campos().entrySet()) {
+            tabla.declarar(e.getKey(), e.getValue());
+        }
+
+        // Ambito para parametros y cuerpo
+        tabla.abrirAmbito();
+        for (Parametro param : m.parametros()) {
+            if (tabla.estaDeclaradoLocal(param.nombre())) {
+                errores.errorSemantico("Parametro duplicado: " + param.nombre());
+            }
+            tabla.declarar(param.nombre(),
+                new InfoVariable(param.tipo(), true, param.esReferencia()));
+        }
+        for (Stmt stmt : m.cuerpo().instrucciones()) {
+            analizarStmt(stmt);
+        }
+        tabla.cerrarAmbito();
+        tabla.cerrarAmbito();
+
+        tipoRetornoActual = tipoRetAnt;
+        claseActual = claseAnt;
     }
 
     /**
@@ -69,14 +148,16 @@ public class AnalizadorSemantico {
 
     private void analizarStmt(Stmt stmt) {
         switch (stmt.nodeKind()) {
-            case DEC_VAR:    analizarDecVar((DecVar) stmt);          break;
-            case ASIGNACION: analizarAsignacion((Asignacion) stmt);  break;
-            case BLOQUE:     analizarBloque((Bloque) stmt);          break;
-            case IF:         analizarIf((If) stmt);                  break;
-            case WHILE:      analizarWhile((While) stmt);            break;
-            case READ:       analizarRead((Read) stmt);              break;
-            case PRINT:      analizarPrint((Print) stmt);            break;
-            case RETURN:     analizarReturn((Return) stmt);          break;
+            case DEC_VAR:      analizarDecVar((DecVar) stmt);              break;
+            case ASIGNACION:   analizarAsignacion((Asignacion) stmt);      break;
+            case BLOQUE:       analizarBloque((Bloque) stmt);              break;
+            case IF:           analizarIf((If) stmt);                      break;
+            case WHILE:        analizarWhile((While) stmt);                break;
+            case READ:         analizarRead((Read) stmt);                  break;
+            case PRINT:        analizarPrint((Print) stmt);                break;
+            case RETURN:       analizarReturn((Return) stmt);              break;
+            case LLAMADA_STMT: analizarExpr(((LlamadaStmt) stmt).llamada()); break;
+            default: break;
         }
     }
 
@@ -130,6 +211,25 @@ public class AnalizadorSemantico {
                 return null;
             }
             tipo = tipoElementoArray((TipoArray) tipoBase);
+        } else if (lhs instanceof AccesoCampo) {
+            AccesoCampo acc = (AccesoCampo) lhs;
+            T tipoObj = analizarLhs(acc.objeto());
+            if (!(tipoObj instanceof TipoClase)) {
+                errores.errorSemantico("Solo los objetos tienen campos, no " + tipoObj);
+                return null;
+            }
+            InfoClase clase = clases.get(((TipoClase) tipoObj).nombre());
+            if (clase == null) {
+                errores.errorSemantico("Clase desconocida: " + tipoObj);
+                return null;
+            }
+            InfoVariable infoCampo = clase.campos().get(acc.campo());
+            if (infoCampo == null) {
+                errores.errorSemantico("La clase '" + clase.nombre()
+                    + "' no tiene el campo '" + acc.campo() + "'");
+                return null;
+            }
+            tipo = infoCampo.tipo();
         } else {
             errores.errorSemantico("LHS invalido");
             return null;
@@ -452,6 +552,97 @@ public class AnalizadorSemantico {
                 }
                 return inf.tipoRetorno();
             }
+
+            case ACCESO_CAMPO: {
+                AccesoCampo ac = (AccesoCampo) expr;
+                T tipoObj = analizarExpr(ac.objeto());
+                if (!(tipoObj instanceof TipoClase)) {
+                    errores.errorSemantico("Solo los objetos tienen campos, no " + tipoObj);
+                    return null;
+                }
+                InfoClase clase = clases.get(((TipoClase) tipoObj).nombre());
+                if (clase == null) {
+                    errores.errorSemantico("Clase desconocida: " + tipoObj);
+                    return null;
+                }
+                InfoVariable infoCampo = clase.campos().get(ac.campo());
+                if (infoCampo == null) {
+                    errores.errorSemantico("La clase '" + clase.nombre()
+                        + "' no tiene el campo '" + ac.campo() + "'");
+                    return null;
+                }
+                return infoCampo.tipo();
+            }
+
+            case LLAMADA_METODO: {
+                LlamadaMetodo lm = (LlamadaMetodo) expr;
+                T tipoObj = analizarExpr(lm.objeto());
+                if (!(tipoObj instanceof TipoClase)) {
+                    errores.errorSemantico("Solo los objetos tienen metodos, no " + tipoObj);
+                    return null;
+                }
+                InfoClase clase = clases.get(((TipoClase) tipoObj).nombre());
+                if (clase == null) {
+                    errores.errorSemantico("Clase desconocida: " + tipoObj);
+                    return null;
+                }
+                InfoFuncion infoMet = clase.metodos().get(lm.metodo());
+                if (infoMet == null) {
+                    errores.errorSemantico("La clase '" + clase.nombre()
+                        + "' no tiene el metodo '" + lm.metodo() + "'");
+                    return null;
+                }
+                List<Parametro> ps = infoMet.parametros();
+                List<E> as = lm.args();
+                if (as.size() != ps.size()) {
+                    errores.errorSemantico("Numero de argumentos incorrecto en '"
+                        + clase.nombre() + "." + lm.metodo() + "': se esperaban "
+                        + ps.size() + " pero se pasaron " + as.size());
+                }
+                int n = Math.min(as.size(), ps.size());
+                for (int i = 0; i < n; i++) {
+                    T tipoArg = analizarExpr(as.get(i));
+                    if (!tiposCompatibles(ps.get(i).tipo(), tipoArg)) {
+                        errores.errorSemantico("Tipo incorrecto en argumento " + (i + 1)
+                            + " de '" + clase.nombre() + "." + lm.metodo()
+                            + "': se esperaba " + ps.get(i).tipo()
+                            + " pero se obtuvo " + tipoArg);
+                    }
+                }
+                return infoMet.tipoRetorno();
+            }
+
+            case NEW_INSTANCIA: {
+                NewInstancia ni = (NewInstancia) expr;
+                InfoClase clase = clases.get(ni.nombreClase());
+                if (clase == null) {
+                    errores.errorSemantico("Clase no declarada: " + ni.nombreClase());
+                    return null;
+                }
+                InfoFuncion init = clase.metodos().get("init");
+                if (init != null) {
+                    List<Parametro> ps = init.parametros();
+                    List<E> as = ni.args();
+                    if (as.size() != ps.size()) {
+                        errores.errorSemantico("Numero de argumentos incorrecto en new "
+                            + ni.nombreClase() + "(): se esperaban " + ps.size()
+                            + " pero se pasaron " + as.size());
+                    }
+                    int n = Math.min(as.size(), ps.size());
+                    for (int i = 0; i < n; i++) {
+                        T tipoArg = analizarExpr(as.get(i));
+                        if (!tiposCompatibles(ps.get(i).tipo(), tipoArg)) {
+                            errores.errorSemantico("Tipo incorrecto en argumento " + (i + 1)
+                                + " de new " + ni.nombreClase() + "(): se esperaba "
+                                + ps.get(i).tipo() + " pero se obtuvo " + tipoArg);
+                        }
+                    }
+                } else if (!ni.args().isEmpty()) {
+                    errores.errorSemantico("La clase '" + ni.nombreClase()
+                        + "' no tiene metodo init pero se pasaron argumentos a new");
+                }
+                return new TipoClase(ni.nombreClase());
+            }
         }
         errores.errorSemantico("Expresion de tipo desconocido");
         return null;
@@ -496,6 +687,9 @@ public class AnalizadorSemantico {
             TipoArray a2 = (TipoArray) t2;
             return a1.dimensiones().equals(a2.dimensiones())
                 && tiposCompatibles(a1.tipoBase(), a2.tipoBase());
+        }
+        if (t1 instanceof TipoClase && t2 instanceof TipoClase) {
+            return ((TipoClase) t1).nombre().equals(((TipoClase) t2).nombre());
         }
         return false;
     }

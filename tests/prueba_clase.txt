@@ -1,0 +1,42 @@
+# Test de clases en Snapi
+
+class : Point {
+    var int : x;
+    var int : y;
+
+    func void : init(var int : px, var int : py) {
+        x = px;
+        y = py;
+    }
+
+    func int : getX() {
+        return x;
+    }
+
+    func int : getY() {
+        return y;
+    }
+
+    func void : move(var int : dx, var int : dy) {
+        x = x + dx;
+        y = y + dy;
+    }
+}
+
+# Crear una instancia con el constructor
+var Point : p = new Point(3, 4);
+
+# Imprimir las coordenadas iniciales
+print(p.getX());
+print(p.getY());
+
+# Mover el punto
+p.move(10, 20);
+
+# Imprimir las nuevas coordenadas
+print(p.getX());
+print(p.getY());
+
+# Asignacion directa a un campo
+p.x = 100;
+print(p.getX());
