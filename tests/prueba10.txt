@@ -1,0 +1,7 @@
+func void : test() {
+    var int : interna = 10;
+}
+
+test();
+# Error semántico: 'interna' no es accesible fuera del bloque de la función
+print(interna); 

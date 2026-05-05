@@ -33,12 +33,12 @@ terminal FUNC, VOID, RETURN;
 terminal PARENTESIS_APERTURA, PARENTESIS_CIERRE;
 terminal CORCHETE_APERTURA, CORCHETE_CIERRE;
 terminal COMA, AMPERSAND;
-terminal INT, BOOL;
+terminal INT, REAL, BOOL;
 terminal TRUE, FALSE;
 terminal SUMA, RESTA, MULTIPLICACION, DIVISION;
 terminal MENOR, MAYOR, IGUALDAD, AND, OR;
 terminal IF, ELSE, WHILE, READ, PRINT;
-terminal alex.TokenValue ID, NUM;
+terminal alex.TokenValue ID, NUM, NUM_REAL;
 
 /* No terminales tipados */
 non terminal Programa programa;
@@ -127,6 +127,8 @@ declaracion_funcion ::= FUNC tipo:t DOS_PUNTOS ID:id
 
 tipo ::= INT
          {: RESULT = new TipoBasico("int"); :}
+       | REAL
+         {: RESULT = new TipoBasico("real"); :}
        | BOOL
          {: RESULT = new TipoBasico("bool"); :}
        | VOID
@@ -263,6 +265,8 @@ expr_unaria ::= RESTA expr_unaria:e
 
 expr_base ::= NUM:n
               {: RESULT = new Num(n.lexema); :}
+            | NUM_REAL:n
+              {: RESULT = new NumReal(n.lexema); :}
             | TRUE
               {: RESULT = new Bool(true); :}
             | FALSE

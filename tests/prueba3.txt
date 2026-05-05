@@ -1,0 +1,15 @@
+func int : suma(var int : a, var int : b) {
+    return a + b;
+}
+
+func void : incrementar(var int : &n) {
+    n = n + 1;
+}
+
+var int : x = 10;
+var int : y = 20;
+var int : z = suma(x, y);
+
+print(z);
+incrementar(z);
+print(z);

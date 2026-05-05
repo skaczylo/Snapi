@@ -1,9 +1,0 @@
-var int : x;
-var int : y;
-
-x = 5;
-y = x + 3;
-
-print(x);
-print(y);
-print(x + y);

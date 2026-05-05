@@ -1,0 +1,3 @@
+var int : x = 10;
+# Error léxico: El símbolo @ no existe en Snapi
+var int : y = x @ 2; 

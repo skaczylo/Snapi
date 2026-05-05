@@ -63,6 +63,8 @@ return = return
 
 int = int
 numeroEntero = {digito}+
+real = real
+numeroReal = {digito}+\.{digito}+
 bool = bool
 true = true
 false = false
@@ -108,6 +110,7 @@ print = print
 {ampersand}               { return ops.unidad(ClaseLexica.AMPERSAND); }
 {void}                    { return ops.unidad(ClaseLexica.VOID); }
 {int}                     { return ops.unidad(ClaseLexica.INT); }
+{real}                    { return ops.unidad(ClaseLexica.REAL); }
 {bool}                    { return ops.unidad(ClaseLexica.BOOL); }
 {true}                    { return ops.unidad(ClaseLexica.TRUE); }
 {false}                   { return ops.unidad(ClaseLexica.FALSE); }
@@ -127,6 +130,7 @@ print = print
 {print}                   { return ops.unidad(ClaseLexica.PRINT); }
 {return}                  { return ops.unidad(ClaseLexica.RETURN); }
 
+{numeroReal}              { return ops.unidad(ClaseLexica.NUM_REAL, lexema()); }
 {numeroEntero}            { return ops.unidad(ClaseLexica.NUM, lexema()); }
 {identificador}           { return ops.unidad(ClaseLexica.ID, lexema()); }
 

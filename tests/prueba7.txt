@@ -1,0 +1,4 @@
+var int : x = 10;
+# Error sintáctico: Falta el punto y coma
+x = 20
+print(x);

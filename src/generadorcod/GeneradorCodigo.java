@@ -39,6 +39,7 @@ public class GeneradorCodigo {
         int offset;
         int sizeBytes;
         boolean referencia;
+        T tipo;
     }
 
     private static class FuncInfo {
@@ -78,6 +79,7 @@ public class GeneradorCodigo {
             VarInfo info = new VarInfo();
             info.offset    = sigOffsetGlobal;
             info.sizeBytes = tamanoEnBytes(dec.tipo());
+            info.tipo      = dec.tipo();
             globales.put(dec.nombre(), info);
             sigOffsetGlobal += info.sizeBytes;
         } else if (s instanceof Bloque) {
@@ -144,8 +146,10 @@ public class GeneradorCodigo {
         sb.append("(module\n");
 
         // Importaciones del runtime (debe proporcionarlas el host JS)
-        sb.append("  (import \"runtime\" \"print\" (func $print (param i32)))\n");
-        sb.append("  (import \"runtime\" \"read\"  (func $read  (result i32)))\n\n");
+        sb.append("  (import \"runtime\" \"print\"     (func $print     (param i32)))\n");
+        sb.append("  (import \"runtime\" \"read\"      (func $read      (result i32)))\n");
+        sb.append("  (import \"runtime\" \"printReal\" (func $printReal (param f32)))\n");
+        sb.append("  (import \"runtime\" \"readReal\"  (func $readReal  (result f32)))\n\n");
 
         // Memoria lineal y exportacion (util para depuracion)
         sb.append("  (memory 1)\n");
@@ -232,10 +236,11 @@ public class GeneradorCodigo {
 
         sb.append("  (func $").append(fn.nombre());
         for (Parametro p : fn.parametros()) {
-            sb.append(" (param $").append(p.nombre()).append(" i32)");
+            String wasmTy = (!p.esReferencia() && esReal(p.tipo())) ? "f32" : "i32";
+            sb.append(" (param $").append(p.nombre()).append(" ").append(wasmTy).append(")");
         }
         if (!esVoid(fn.tipoRetorno())) {
-            sb.append(" (result i32)");
+            sb.append(esReal(fn.tipoRetorno()) ? " (result f32)" : " (result i32)");
         }
         sb.append("\n");
 
@@ -256,6 +261,7 @@ public class GeneradorCodigo {
             info.offset     = sigOffsetLocal;
             info.sizeBytes  = p.esReferencia() ? CELL_BYTES : tamanoEnBytes(p.tipo());
             info.referencia = p.esReferencia();
+            info.tipo       = p.tipo();
             pilaAmbitos.peek().put(p.nombre(), info);
             sigOffsetLocal += info.sizeBytes;
 
@@ -263,7 +269,13 @@ public class GeneradorCodigo {
             sb.append("    i32.const ").append(info.offset).append("\n");
             sb.append("    i32.add\n");
             sb.append("    local.get $").append(p.nombre()).append("\n");
-            sb.append("    i32.store\n");
+            // Las referencias siempre son punteros (i32). Para parámetros por valor
+            // de tipo real, el wasm trae un f32 en el local y debe almacenarse f32.
+            if (!p.esReferencia() && esReal(p.tipo())) {
+                sb.append("    f32.store\n");
+            } else {
+                sb.append("    i32.store\n");
+            }
         }
 
         // 4. Cuerpo
@@ -309,22 +321,23 @@ public class GeneradorCodigo {
             VarInfo info = new VarInfo();
             info.offset    = sigOffsetLocal;
             info.sizeBytes = tamanoEnBytes(dec.tipo());
+            info.tipo      = dec.tipo();
             pilaAmbitos.peek().put(dec.nombre(), info);
             sigOffsetLocal += info.sizeBytes;
         }
         if (dec.tieneInit()) {
-            // codeD(x); codeE(init); i32.store
+            // codeD(x); codeE(init); store
             emitDireccionId(dec.nombre());
             genExpr(dec.init());
-            sb.append("    i32.store\n");
+            sb.append(esReal(dec.tipo()) ? "    f32.store\n" : "    i32.store\n");
         }
     }
 
     private void genAsig(Asignacion a) {
-        // codeD(lhs); codeE(rhs); i32.store
+        // codeD(lhs); codeE(rhs); store
         genDireccion(a.lhs());
         genExpr(a.rhs());
-        sb.append("    i32.store\n");
+        sb.append(esRealExpr(a.lhs()) ? "    f32.store\n" : "    i32.store\n");
     }
 
     private void genBloque(Bloque b) {
@@ -365,15 +378,22 @@ public class GeneradorCodigo {
     }
 
     private void genRead(Read r) {
-        // codeD(x); call $read; i32.store
+        // codeD(x); call $read|$readReal; store
         emitDireccionId(r.nombre());
-        sb.append("    call $read\n");
-        sb.append("    i32.store\n");
+        VarInfo info = buscarLocal(r.nombre());
+        if (info == null) info = globales.get(r.nombre());
+        if (esReal(info.tipo)) {
+            sb.append("    call $readReal\n");
+            sb.append("    f32.store\n");
+        } else {
+            sb.append("    call $read\n");
+            sb.append("    i32.store\n");
+        }
     }
 
     private void genPrint(Print p) {
         genExpr(p.expr());
-        sb.append("    call $print\n");
+        sb.append(esRealExpr(p.expr()) ? "    call $printReal\n" : "    call $print\n");
     }
 
     private void genReturn(Return r) {
@@ -393,46 +413,45 @@ public class GeneradorCodigo {
             case NUM:
                 sb.append("    i32.const ").append(((Num) e).num()).append("\n");
                 break;
+            case NUM_REAL:
+                sb.append("    f32.const ").append(((NumReal) e).num()).append("\n");
+                break;
             case BOOL:
                 sb.append("    i32.const ").append(((Bool) e).valor() ? 1 : 0).append("\n");
                 break;
             case ID:
-                // codeD(id); i32.load
-                genDireccion(e);
-                sb.append("    i32.load\n");
-                break;
             case ACCESO_ARRAY:
-                // codeD(acceso); i32.load
+                // codeD(designador); load (f32 si es real, i32 en otro caso)
                 genDireccion(e);
-                sb.append("    i32.load\n");
+                sb.append(esRealExpr(e) ? "    f32.load\n" : "    i32.load\n");
                 break;
             case SUMA:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.add\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.add\n" : "    i32.add\n");
                 break;
             case RESTA:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.sub\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.sub\n" : "    i32.sub\n");
                 break;
             case MUL:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.mul\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.mul\n" : "    i32.mul\n");
                 break;
             case DIV:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.div_s\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.div\n" : "    i32.div_s\n");
                 break;
             case MENOR:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.lt_s\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.lt\n" : "    i32.lt_s\n");
                 break;
             case MAYOR:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.gt_s\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.gt\n" : "    i32.gt_s\n");
                 break;
             case IGUALDAD:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
-                sb.append("    i32.eq\n");
+                sb.append(esRealExpr(e.opnd1()) ? "    f32.eq\n" : "    i32.eq\n");
                 break;
             case AND:
                 genExpr(e.opnd1()); genExpr(e.opnd2());
@@ -443,10 +462,15 @@ public class GeneradorCodigo {
                 sb.append("    i32.or\n");
                 break;
             case MENOS_UNARIO:
-                // 0 - x
-                sb.append("    i32.const 0\n");
-                genExpr(e.opnd1());
-                sb.append("    i32.sub\n");
+                if (esRealExpr(e.opnd1())) {
+                    genExpr(e.opnd1());
+                    sb.append("    f32.neg\n");
+                } else {
+                    // 0 - x
+                    sb.append("    i32.const 0\n");
+                    genExpr(e.opnd1());
+                    sb.append("    i32.sub\n");
+                }
                 break;
             case LLAMADA_FUNCION:
                 genLlamada((LlamadaFuncion) e);
@@ -550,5 +574,14 @@ public class GeneradorCodigo {
 
     private boolean esVoid(T t) {
         return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("void");
+    }
+
+    private boolean esReal(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("real");
+    }
+
+    /** ¿La expresión tiene tipo real (segun la anotacion semantica)? */
+    private boolean esRealExpr(E e) {
+        return esReal(tipos.get(e));
     }
 }

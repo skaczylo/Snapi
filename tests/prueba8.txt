@@ -1,0 +1,5 @@
+var int : x;
+var bool : b = true;
+
+# Error semántico: No se puede asignar un booleano a un entero
+x = b; 

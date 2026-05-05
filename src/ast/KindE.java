@@ -11,6 +11,7 @@ public enum KindE {
 	AND,
 	OR,
 	NUM,
+	NUM_REAL,
 	ID,
 	BOOL,
 	ACCESO_ARRAY,

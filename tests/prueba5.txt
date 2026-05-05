@@ -1,0 +1,10 @@
+var real : a = 1.5;
+var real : b = 2.5;
+var real : res = (a + b) * 2.0;
+
+if (res > 5.0) {
+    print(res);
+}
+
+var bool : test = (1.0 < 2.0) and true;
+print(test);

@@ -1,12 +1,14 @@
 (module
-  (import "runtime" "print" (func $print (param i32)))
-  (import "runtime" "read"  (func $read  (result i32)))
+  (import "runtime" "print"     (func $print     (param i32)))
+  (import "runtime" "read"      (func $read      (result i32)))
+  (import "runtime" "printReal" (func $printReal (param f32)))
+  (import "runtime" "readReal"  (func $readReal  (result f32)))
 
   (memory 1)
   (export "memory" (memory 0))
 
-  (global $SP (mut i32) (i32.const 8))
-  (global $MP (mut i32) (i32.const 8))
+  (global $SP (mut i32) (i32.const 12))
+  (global $MP (mut i32) (i32.const 12))
   (global $NP (mut i32) (i32.const 65532))
 
   ;; Reserva un marco de tamano $size sobre la pila.
@@ -38,26 +40,23 @@
 
   (func $_main
     i32.const 0
-    i32.const 7
+    i32.const 42
     i32.store
     i32.const 4
+    f32.const 3.1415
+    f32.store
+    i32.const 8
     i32.const 1
     i32.store
     i32.const 0
     i32.load
-    i32.const 3
-    i32.gt_s
+    call $print
     i32.const 4
-    i32.load
-    i32.and
-    if
-    i32.const 0
+    f32.load
+    call $printReal
+    i32.const 8
     i32.load
     call $print
-    else
-    i32.const 0
-    call $print
-    end
   )
 
   (start $_main)

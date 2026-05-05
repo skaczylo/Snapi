@@ -220,8 +220,8 @@ public class AnalizadorSemantico {
             return;
         }
         T tipo = ((InfoVariable) info).tipo();
-        if (!esInt(tipo) && !esBool(tipo)) {
-            errores.errorSemantico("read() solo puede leer variables int o bool, no " + tipo);
+        if (!esInt(tipo) && !esBool(tipo) && !esReal(tipo)) {
+            errores.errorSemantico("read() solo puede leer variables int, real o bool, no " + tipo);
         }
     }
 
@@ -324,8 +324,12 @@ public class AnalizadorSemantico {
         switch (expr.kind()) {
 
             case NUM:
-                // Literales numéricos siempre son int
+                // Literales numéricos enteros siempre son int
                 return new TipoBasico("int");
+
+            case NUM_REAL:
+                // Literales numéricos con punto decimal siempre son real
+                return new TipoBasico("real");
 
             case BOOL:
                 // Literales booleanos (true/false) siempre son bool
@@ -347,21 +351,25 @@ public class AnalizadorSemantico {
             }
 
             case SUMA: case RESTA: case MUL: case DIV: {
-                // Operaciones aritméticas: int ⊕ int → int
+                // Operaciones aritméticas: int ⊕ int → int  ó  real ⊕ real → real
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
-                if (!esInt(t1) || !esInt(t2)) {
-                    errores.errorSemantico("Los operandos de operaciones aritmeticas deben ser int");
+                if (esInt(t1) && esInt(t2)) {
+                    return new TipoBasico("int");
                 }
+                if (esReal(t1) && esReal(t2)) {
+                    return new TipoBasico("real");
+                }
+                errores.errorSemantico("Los operandos de operaciones aritmeticas deben ser ambos int o ambos real");
                 return new TipoBasico("int");
             }
 
             case MENOR: case MAYOR: {
-                // Comparaciones: int < int → bool, int > int → bool
+                // Comparaciones: int<int → bool  ó  real<real → bool
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
-                if (!esInt(t1) || !esInt(t2)) {
-                    errores.errorSemantico("Los operandos de < y > deben ser int");
+                if (!((esInt(t1) && esInt(t2)) || (esReal(t1) && esReal(t2)))) {
+                    errores.errorSemantico("Los operandos de < y > deben ser ambos int o ambos real");
                 }
                 return new TipoBasico("bool");
             }
@@ -387,11 +395,11 @@ public class AnalizadorSemantico {
             }
 
             case MENOS_UNARIO: {
-                // Negación unaria: -int → int
+                // Negación unaria: -int → int  ó  -real → real
                 T t = analizarExpr(expr.opnd1());
-                if (!esInt(t)) {
-                    errores.errorSemantico("El operando de la negacion unaria debe ser int");
-                }
+                if (esInt(t)) return new TipoBasico("int");
+                if (esReal(t)) return new TipoBasico("real");
+                errores.errorSemantico("El operando de la negacion unaria debe ser int o real");
                 return new TipoBasico("int");
             }
 
@@ -464,6 +472,10 @@ public class AnalizadorSemantico {
 
     private boolean esInt(T t) {
         return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("int");
+    }
+
+    private boolean esReal(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("real");
     }
 
     private boolean esBool(T t) {
