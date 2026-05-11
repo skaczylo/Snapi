@@ -1,5 +1,15 @@
-var int : x;
-var bool : b = true;
+# Funciones con paso de parametros por valor
+func int : cuadrado(var int : n) {
+    return n * n;
+}
 
-# Error semántico: No se puede asignar un booleano a un entero
-x = b; 
+func real : area_circulo(var real : radio) {
+    var real : pi = 3.1415;
+    return pi * radio * radio;
+}
+
+var int : r1 = cuadrado(5);
+var real : r2 = area_circulo(2.0);
+
+print(r1);
+print(r2);

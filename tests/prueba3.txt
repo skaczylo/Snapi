@@ -1,15 +1,11 @@
-func int : suma(var int : a, var int : b) {
-    return a + b;
-}
+# Operador de negacion unaria sobre int y real
+var int : a = 5;
+var int : b = -a;
+var int : c = -a + 10;
 
-func void : incrementar(var int : &n) {
-    n = n + 1;
-}
+var real : x = 3.14;
+var real : y = -x;
 
-var int : x = 10;
-var int : y = 20;
-var int : z = suma(x, y);
-
-print(z);
-incrementar(z);
-print(z);
+print(b);
+print(c);
+print(y);

@@ -1,10 +1,10 @@
-var real : a = 1.5;
-var real : b = 2.5;
-var real : res = (a + b) * 2.0;
+# Bucle while: suma de los primeros 5 numeros
+var int : i = 1;
+var int : suma = 0;
 
-if (res > 5.0) {
-    print(res);
+while (i < 6) {
+    suma = suma + i;
+    i = i + 1;
 }
 
-var bool : test = (1.0 < 2.0) and true;
-print(test);
+print(suma);

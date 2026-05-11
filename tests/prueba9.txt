@@ -1,3 +1,25 @@
-var int : a = 5;
-# Error semántico: 'b' no ha sido declarada
-a = a + b; 
+# Funciones con paso de parametros por referencia
+
+
+func int : acumular(var int : &total, var int : valor) {
+    total = total + valor;
+    return total;
+}
+
+func int : doble(var int : &x) {
+    x = x * 2;
+    return x;
+}
+
+var int : suma = 0;
+
+var int : r1 = acumular(suma, 10);
+var int : r2 = acumular(suma, 5);
+
+print(suma);    # 15: suma fue modificada por referencia
+print(r1);      # 10
+print(r2);      # 15
+
+var int : r3 = doble(suma);
+print(suma);    # 30: suma fue modificada por referencia
+print(r3);      # 30

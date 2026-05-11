@@ -5,13 +5,13 @@ import errors.GestionErrores;
 import java.util.*;
 
 /**
- * Comprobación de tipos y gestión de ámbitos sobre el AST.
+ * Comprobacion de tipos y gestion de ambitos.
  */
 public class AnalizadorSemantico {
     private TablaSimbolos tabla;
     private GestionErrores errores;
-    private T tipoRetornoActual; // Para validar sentencias return
-    private Map<E, T> tipos;     // Anotaciones de tipos para el generador
+    private T tipoRetornoActual; // Para validar return
+    private Map<E, T> tipos;     // Anotaciones para el generador
 
     public AnalizadorSemantico() {
         this.tabla = new TablaSimbolos();
@@ -22,7 +22,7 @@ public class AnalizadorSemantico {
     public Map<E, T> getTipos() { return tipos; }
 
     /**
-     * Inicia el análisis del programa.
+     * Analisis del programa.
      */
     public void analizar(Programa p) {
         for (I inst : p.instrucciones()) {
@@ -39,7 +39,7 @@ public class AnalizadorSemantico {
     }
 
     /**
-     * Valida declaración de funciones, parámetros y cuerpo.
+     * Declaracion de funciones.
      */
     private void analizarDecFuncion(DecFuncion dec) {
         String nombre = dec.nombre();
@@ -102,7 +102,7 @@ public class AnalizadorSemantico {
     }
 
     /**
-     * Analiza el lado izquierdo (lvalue) y anota su tipo.
+     * Lado izquierdo (lvalue).
      */
     private T analizarLhs(E lhs) {
         T tipo;
@@ -138,15 +138,6 @@ public class AnalizadorSemantico {
         return tipo;
     }
 
-    /**
-     * Analiza un bloque de sentencias.
-     *
-     * Un bloque abre un nuevo ámbito para las variables declaradas dentro,
-     * implementando el scoping lexical anidado de Snapi.
-     * Las variables locales del bloque no son accesibles fuera de él.
-     *
-     * @param bloque  el nodo Bloque del AST
-     */
     private void analizarBloque(Bloque bloque) {
         tabla.abrirAmbito();
         for (Stmt stmt : bloque.instrucciones()) {
@@ -155,18 +146,6 @@ public class AnalizadorSemantico {
         tabla.cerrarAmbito();
     }
 
-    /**
-     * Analiza una sentencia condicional if/else.
-     *
-     * Validaciones:
-     *   - La condición debe ser de tipo bool
-     *   - El bloque then es obligatorio
-     *   - El bloque else es opcional
-     *
-     * Cada bloque abre su propio ámbito para variables locales.
-     *
-     * @param ifStmt  el nodo If del AST
-     */
     private void analizarIf(If ifStmt) {
         T tipoCond = analizarExpr(ifStmt.condicion());
         if (!esBool(tipoCond)) {
@@ -178,17 +157,6 @@ public class AnalizadorSemantico {
         }
     }
 
-    /**
-     * Analiza un bucle while.
-     *
-     * Validaciones:
-     *   - La condición debe ser de tipo bool
-     *   - El cuerpo puede contener cualquier sentencia válida
-     *
-     * El cuerpo abre su propio ámbito para variables locales.
-     *
-     * @param w  el nodo While del AST
-     */
     private void analizarWhile(While w) {
         T tipoCond = analizarExpr(w.condicion());
         if (!esBool(tipoCond)) {
@@ -197,18 +165,6 @@ public class AnalizadorSemantico {
         analizarBloque(w.cuerpo());
     }
 
-    /**
-     * Analiza una operación de lectura (read).
-     *
-     * read(x) lee un valor del flujo de entrada (implementado por el runtime)
-     * y lo almacena en la variable x.
-     *
-     * Validaciones:
-     *   - La variable debe existir
-     *   - La variable debe ser de tipo int o bool (los únicos tipos que se pueden leer)
-     *
-     * @param read  el nodo Read del AST
-     */
     private void analizarRead(Read read) {
         Object info = tabla.buscar(read.nombre());
         if (info == null) {
@@ -225,30 +181,12 @@ public class AnalizadorSemantico {
         }
     }
 
-    /**
-     * Analiza una operación de escritura (print).
-     *
-     * print(expr) evalúa la expresión y la escribe en el flujo de salida
-     * (implementado por el runtime). La expresión puede ser int o bool.
-     *
-     * @param print  el nodo Print del AST
-     */
     private void analizarPrint(Print print) {
         analizarExpr(print.expr());
     }
 
     /**
-     * Analiza una sentencia de retorno.
-     *
-     * Validaciones:
-     *   - Solo es válido dentro de una función (tipoRetornoActual no null)
-     *   - Para funciones void: no puede haber expresión de retorno
-     *   - Para funciones no-void: debe haber expresión de retorno con tipo compatible
-     *
-     * tipoRetornoActual se establece en analizarDecFuncion y se restaura tras
-     * analizar el cuerpo, permitiendo validar retornos correctos en cada función.
-     *
-     * @param ret  el nodo Return del AST
+     * Sentencia return.
      */
     private void analizarReturn(Return ret) {
         if (tipoRetornoActual == null) {
@@ -273,70 +211,31 @@ public class AnalizadorSemantico {
     }
 
     // ---------------------------------------------------------------
-    // Análisis de expresiones: inferencia de tipos y anotación
+    // Analisis de expresiones
     // ---------------------------------------------------------------
 
-    /**
-     * Punto de entrada para análisis de expresiones.
-     *
-     * Operaciones:
-     *   1. Calcula el tipo de la expresión mediante calcularTipo
-     *   2. Anota la expresión en el mapa de tipos para posterior consulta
-     *      (crucial para el generador de código)
-     *   3. Retorna el tipo para que el llamador pueda hacer validaciones
-     *
-     * La anotación es especialmente importante para:
-     *   - Expresiones de acceso a array: necesita conocer el tipo base
-     *     para calcular strides en el generador
-     *   - Expresiones de parámetros por referencia: necesita saber si son
-     *     referencias para generar código de desreferenciación
-     *
-     * @param expr  la expresión a analizar
-     * @return      el tipo inferido de la expresión
-     */
     public T analizarExpr(E expr) {
         T tipo = calcularTipo(expr);
-        tipos.put(expr, tipo); // anotación: crucial para el generador
+        tipos.put(expr, tipo); // anotacion para el generador
         return tipo;
     }
 
     /**
-     * Calcula el tipo de una expresión mediante análisis recursivo y validación.
-     *
-     * Maneja todos los tipos de expresiones:
-     *   - Literales (NUM, BOOL): tipos base inmediatos
-     *   - Identificadores (ID): búsqueda en tabla de símbolos
-     *   - Operaciones binarias aritméticas (SUMA, RESTA, MUL, DIV): int × int → int
-     *   - Comparaciones (MENOR, MAYOR): int × int → bool
-     *   - Igualdad (IGUALDAD): T × T → bool (para cualquier tipo compatible)
-     *   - Lógicas (AND, OR): bool × bool → bool
-     *   - Unarias (MENOS_UNARIO): int → int
-     *   - Array access (ACCESO_ARRAY): array[n][m]... × int → tipo del elemento
-     *   - Llamadas a función (LLAMADA_FUNCION): verifica argumentos y retorna tipo
-     *
-     * Estrategia: valida cada expresión antes de retornar su tipo, fallando
-     * inmediatamente si hay incompatibilidad.
-     *
-     * @param expr  la expresión a analizar
-     * @return      el tipo inferido, o null si hay error
+     * Calcula el tipo de una expresion.
      */
     private T calcularTipo(E expr) {
         switch (expr.kind()) {
 
             case NUM:
-                // Literales numéricos enteros siempre son int
                 return new TipoBasico("int");
 
             case NUM_REAL:
-                // Literales numéricos con punto decimal siempre son real
                 return new TipoBasico("real");
 
             case BOOL:
-                // Literales booleanos (true/false) siempre son bool
                 return new TipoBasico("bool");
 
             case ID: {
-                // Identificador: buscar variable en tabla de símbolos
                 String nombre = ((Id) expr).nombre();
                 Object info = tabla.buscar(nombre);
                 if (info == null) {
@@ -351,7 +250,6 @@ public class AnalizadorSemantico {
             }
 
             case SUMA: case RESTA: case MUL: case DIV: {
-                // Operaciones aritméticas: int ⊕ int → int  ó  real ⊕ real → real
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
                 if (esInt(t1) && esInt(t2)) {
@@ -365,7 +263,6 @@ public class AnalizadorSemantico {
             }
 
             case MENOR: case MAYOR: {
-                // Comparaciones: int<int → bool  ó  real<real → bool
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
                 if (!((esInt(t1) && esInt(t2)) || (esReal(t1) && esReal(t2)))) {
@@ -375,7 +272,6 @@ public class AnalizadorSemantico {
             }
 
             case IGUALDAD: {
-                // Igualdad: T == T → bool (ambos operandos deben tener el mismo tipo)
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
                 if (!tiposCompatibles(t1, t2)) {
@@ -385,7 +281,6 @@ public class AnalizadorSemantico {
             }
 
             case AND: case OR: {
-                // Conectivas lógicas: bool ∧ bool → bool, bool ∨ bool → bool
                 T t1 = analizarExpr(expr.opnd1());
                 T t2 = analizarExpr(expr.opnd2());
                 if (!esBool(t1) || !esBool(t2)) {
@@ -395,7 +290,6 @@ public class AnalizadorSemantico {
             }
 
             case MENOS_UNARIO: {
-                // Negación unaria: -int → int  ó  -real → real
                 T t = analizarExpr(expr.opnd1());
                 if (esInt(t)) return new TipoBasico("int");
                 if (esReal(t)) return new TipoBasico("real");
@@ -404,9 +298,6 @@ public class AnalizadorSemantico {
             }
 
             case ACCESO_ARRAY: {
-                // Indexación: array[i] recorre la jerarquía de tipos hasta obtener
-                // el tipo del elemento. Para arrays multidimensionales, la recursión
-                // en analizarLhs proporciona el tipo "un nivel más profundo".
                 AccesoArray acc = (AccesoArray) expr;
                 T tipoBase = analizarExpr(acc.array());
                 T tipoIdx  = analizarExpr(acc.indice());
@@ -421,7 +312,6 @@ public class AnalizadorSemantico {
             }
 
             case LLAMADA_FUNCION: {
-                // Llamada a función: valida argumento s y retorna tipo de retorno
                 LlamadaFuncion lf = (LlamadaFuncion) expr;
                 Object info = tabla.buscar(lf.nombre());
                 if (info == null || !(info instanceof InfoFuncion)) {
@@ -432,14 +322,12 @@ public class AnalizadorSemantico {
                 List<Parametro> params = inf.parametros();
                 List<E> args = lf.args();
 
-                // Validar número de argumentos
                 if (args.size() != params.size()) {
                     errores.errorSemantico("Numero de argumentos incorrecto en llamada a '"
                         + lf.nombre() + "': se esperaban " + params.size()
                         + " pero se pasaron " + args.size());
                 }
 
-                // Validar tipo de cada argumento
                 int n = Math.min(args.size(), params.size());
                 for (int i = 0; i < n; i++) {
                     T tipoArg = analizarExpr(args.get(i));
@@ -458,10 +346,10 @@ public class AnalizadorSemantico {
     }
 
     // ---------------------------------------------------------------
-    // Utilidades de tipos
+    // Utilidades
     // ---------------------------------------------------------------
 
-    /** Tipo del elemento al indexar un TipoArray una dimension. */
+    /** Tipo elemento del array. */
     private T tipoElementoArray(TipoArray arr) {
         List<Integer> dims = arr.dimensiones();
         if (dims.size() == 1) {
@@ -469,6 +357,37 @@ public class AnalizadorSemantico {
         }
         return new TipoArray(new ArrayList<>(dims.subList(1, dims.size())), arr.tipoBase());
     }
+
+    private boolean esInt(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("int");
+    }
+
+    private boolean esReal(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("real");
+    }
+
+    private boolean esBool(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("bool");
+    }
+
+    private boolean esVoid(T t) {
+        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("void");
+    }
+
+    private boolean tiposCompatibles(T t1, T t2) {
+        if (t1 == null || t2 == null) return false;
+        if (t1 instanceof TipoBasico && t2 instanceof TipoBasico) {
+            return ((TipoBasico) t1).nombre().equals(((TipoBasico) t2).nombre());
+        }
+        if (t1 instanceof TipoArray && t2 instanceof TipoArray) {
+            TipoArray a1 = (TipoArray) t1;
+            TipoArray a2 = (TipoArray) t2;
+            return a1.dimensiones().equals(a2.dimensiones())
+                && tiposCompatibles(a1.tipoBase(), a2.tipoBase());
+        }
+        return false;
+    }
+}
 
     private boolean esInt(T t) {
         return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("int");

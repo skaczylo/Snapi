@@ -40,8 +40,16 @@
 
   (func $_main
     i32.const 0
-    i32.const 10
+    i32.const 7
     i32.store
+    i32.const 0
+    i32.load
+    i32.const 10
+    i32.gt_s
+    if
+    i32.const 2
+    call $print
+    else
     i32.const 0
     i32.load
     i32.const 5
@@ -49,40 +57,22 @@
     if
     i32.const 1
     call $print
-    i32.const 0
-    i32.load
-    i32.const 10
-    i32.eq
-    if
-    i32.const 10
-    call $print
-    end
     else
     i32.const 0
     call $print
     end
+    end
     i32.const 4
-    i32.const 5
-    i32.store
-    block
-    loop
-    i32.const 4
+    i32.const 0
     i32.load
     i32.const 0
     i32.gt_s
-    i32.eqz
-    br_if 1
-    i32.const 4
-    i32.load
-    call $print
-    i32.const 4
-    i32.const 4
-    i32.load
-    i32.const 1
-    i32.sub
     i32.store
-    br 0
-    end
+    i32.const 4
+    i32.load
+    if
+    i32.const 1
+    call $print
     end
   )
 

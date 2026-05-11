@@ -1,3 +1,12 @@
-var int : x = 10;
-# Error léxico: El símbolo @ no existe en Snapi
-var int : y = x @ 2; 
+# Arrays unidimensionales: declaracion, asignacion e indexacion
+var array[5] of int : nums;
+var int : i = 0;
+
+while (i < 5) {
+    nums[i] = i * 2;
+    i = i + 1;
+}
+
+print(nums[0]);
+print(nums[2]);
+print(nums[4]);

@@ -1,7 +1,27 @@
-func void : test() {
-    var int : interna = 10;
+# Combinacion: funciones, reales, negacion unaria, while y referencia
+func real : potencia(var real : base, var int : exp) {
+    var real : resultado = 1.0;
+    var int : i = 0;
+    while (i < exp) {
+        resultado = resultado * base;
+        i = i + 1;
+    }
+    return resultado;
 }
 
-test();
-# Error semántico: 'interna' no es accesible fuera del bloque de la función
-print(interna); 
+func real : valor_absoluto(var real : &x) {
+    if (x < 0.0) {
+        x = -x;
+    }
+    return x;
+}
+
+var real : base = 2.0;
+var int : exponente = 4;
+var real : p = potencia(base, exponente);
+print(p);
+
+var real : valor = -3.5;
+var real : abs = valor_absoluto(valor);
+print(abs);
+print(valor);

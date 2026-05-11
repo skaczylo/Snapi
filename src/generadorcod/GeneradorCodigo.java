@@ -4,13 +4,12 @@ import ast.*;
 import java.util.*;
 
 /**
- * Generación de código WebAssembly (.wat) para Snapi.
- * Implementa una máquina de pila con marcos de activación (DL, parámetros y locales).
+ * Generacion de codigo WebAssembly (.wat).
  */
 public class GeneradorCodigo {
 
-    private static final int CELL_BYTES   = 4;   // Tamaño celda i32
-    private static final int FRAME_HEADER = 4;   // Tamaño del Dynamic Link (DL)
+    private static final int CELL_BYTES   = 4;   // Celda i32
+    private static final int FRAME_HEADER = 4;   // Dynamic Link (DL)
 
     // ---------------------------------------------------------------
     // Estado
@@ -19,14 +18,11 @@ public class GeneradorCodigo {
     private final StringBuilder sb = new StringBuilder();
     private final Map<E, T> tipos;
 
-    // Globales: nombre -> offset
     private final Map<String, VarInfo> globales = new LinkedHashMap<>();
     private int sigOffsetGlobal = 0;
 
-    // Funciones: nombre -> metadatos
     private final Map<String, FuncInfo> funciones = new LinkedHashMap<>();
 
-    // Estado local durante la generación de funciones
     private boolean enFuncion = false;
     private final Deque<Map<String, VarInfo>> pilaAmbitos = new ArrayDeque<>();
     private int sigOffsetLocal;
@@ -47,16 +43,12 @@ public class GeneradorCodigo {
         int frameSize;
     }
 
-    // ---------------------------------------------------------------
-    // API
-    // ---------------------------------------------------------------
-
     public void imprimir() { System.out.print(sb); }
 
     public String getCodigo() { return sb.toString(); }
 
     // ---------------------------------------------------------------
-    // Fase 1: Recolección de símbolos globales y firmas de funciones
+    // Recoleccion
     // ---------------------------------------------------------------
 
     private void pasoRecoleccion(Programa p) {
@@ -102,10 +94,10 @@ public class GeneradorCodigo {
             for (int d : arr.dimensiones()) total *= d;
             return total * CELL_BYTES;
         }
-        return CELL_BYTES; // int / bool / void (void no se almacena, pero da igual)
+        return CELL_BYTES;
     }
 
-    /** Tamano del marco = cabecera + parametros + maximo solapamiento de locales. */
+    /** Tamano del marco. */
     private int calcularFrameSize(DecFuncion fn) {
         int base = FRAME_HEADER;
         for (Parametro p : fn.parametros()) {
@@ -114,7 +106,7 @@ public class GeneradorCodigo {
         return calcMaxLocales(fn.cuerpo(), base, base);
     }
 
-    /** Recorre el cuerpo calculando el offset maximo alcanzado. */
+    /** Calcula offset maximo. */
     private int calcMaxLocales(Bloque b, int curr, int max) {
         int local = curr;
         for (Stmt s : b.instrucciones()) {
@@ -137,7 +129,7 @@ public class GeneradorCodigo {
     }
 
     // ---------------------------------------------------------------
-    // Pase 2: generacion del modulo .wat
+    //  Generacion
     // ---------------------------------------------------------------
 
     public void genPrograma(Programa p) {
@@ -145,17 +137,16 @@ public class GeneradorCodigo {
 
         sb.append("(module\n");
 
-        // Importaciones del runtime (debe proporcionarlas el host JS)
+        // Imports
         sb.append("  (import \"runtime\" \"print\"     (func $print     (param i32)))\n");
         sb.append("  (import \"runtime\" \"read\"      (func $read      (result i32)))\n");
         sb.append("  (import \"runtime\" \"printReal\" (func $printReal (param f32)))\n");
         sb.append("  (import \"runtime\" \"readReal\"  (func $readReal  (result f32)))\n\n");
 
-        // Memoria lineal y exportacion (util para depuracion)
         sb.append("  (memory 1)\n");
         sb.append("  (export \"memory\" (memory 0))\n\n");
 
-        // Registros virtuales
+        // Registros
         sb.append("  (global $SP (mut i32) (i32.const ").append(sigOffsetGlobal).append("))\n");
         sb.append("  (global $MP (mut i32) (i32.const ").append(sigOffsetGlobal).append("))\n");
         sb.append("  (global $NP (mut i32) (i32.const 65532))\n\n");
@@ -163,14 +154,12 @@ public class GeneradorCodigo {
         generarReserveStack();
         generarReleaseStack();
 
-        // Funciones definidas por el usuario
         for (I inst : p.instrucciones()) {
             if (inst instanceof DecFuncion) {
                 generarFuncion((DecFuncion) inst);
             }
         }
 
-        // Programa principal (start)
         generarMain(p);
 
         sb.append("  (start $_main)\n");
@@ -178,16 +167,15 @@ public class GeneradorCodigo {
     }
 
     // ---------------------------------------------------------------
-    // Auxiliares de pila (reserveStack / releaseStack)
+    // Gestion de pila
     // ---------------------------------------------------------------
 
     private void generarReserveStack() {
-        sb.append("  ;; Reserva un marco de tamano $size sobre la pila.\n");
-        sb.append("  ;; Guarda el MP actual como DL en *(SP) y actualiza MP, SP.\n");
+        sb.append("  ;; Reserva marco y actualiza MP, SP\n");
         sb.append("  (func $reserveStack (param $size i32)\n");
         sb.append("    global.get $SP\n");
         sb.append("    global.get $MP\n");
-        sb.append("    i32.store        ;; *(SP) = MP   (DL del nuevo marco)\n");
+        sb.append("    i32.store        ;; *(SP) = MP\n");
         sb.append("    global.get $SP\n");
         sb.append("    global.set $MP   ;; MP = SP\n");
         sb.append("    global.get $SP\n");
@@ -202,19 +190,15 @@ public class GeneradorCodigo {
     }
 
     private void generarReleaseStack() {
-        sb.append("  ;; Libera el marco actual: SP = MP; MP = *(MP)\n");
+        sb.append("  ;; Libera marco\n");
         sb.append("  (func $releaseStack\n");
         sb.append("    global.get $MP\n");
         sb.append("    global.set $SP   ;; SP = MP\n");
         sb.append("    global.get $SP\n");
         sb.append("    i32.load\n");
-        sb.append("    global.set $MP   ;; MP = DL almacenado al principio del marco\n");
+        sb.append("    global.set $MP   ;; MP = *(MP)\n");
         sb.append("  )\n\n");
     }
-
-    // ---------------------------------------------------------------
-    // Funcion main (start)
-    // ---------------------------------------------------------------
 
     private void generarMain(Programa p) {
         sb.append("  (func $_main\n");
@@ -226,10 +210,6 @@ public class GeneradorCodigo {
         }
         sb.append("  )\n\n");
     }
-
-    // ---------------------------------------------------------------
-    // Funciones definidas por el usuario
-    // ---------------------------------------------------------------
 
     private void generarFuncion(DecFuncion fn) {
         FuncInfo fi = funciones.get(fn.nombre());
@@ -244,18 +224,15 @@ public class GeneradorCodigo {
         }
         sb.append("\n");
 
-        // 1. Reservar marco
         sb.append("    i32.const ").append(fi.frameSize).append("\n");
         sb.append("    call $reserveStack\n");
 
-        // 2. Inicializar estado de generacion
         enFuncion = true;
         pilaAmbitos.clear();
         pilaAmbitos.push(new LinkedHashMap<>());
         sigOffsetLocal = FRAME_HEADER;
 
-        // 3. Copiar parametros wasm a memoria (siguiendo la convencion uniforme:
-        //    todas las variables se direccionan via memoria).
+        // Copiar parametros a memoria
         for (Parametro p : fn.parametros()) {
             VarInfo info = new VarInfo();
             info.offset     = sigOffsetLocal;
@@ -269,8 +246,6 @@ public class GeneradorCodigo {
             sb.append("    i32.const ").append(info.offset).append("\n");
             sb.append("    i32.add\n");
             sb.append("    local.get $").append(p.nombre()).append("\n");
-            // Las referencias siempre son punteros (i32). Para parámetros por valor
-            // de tipo real, el wasm trae un f32 en el local y debe almacenarse f32.
             if (!p.esReferencia() && esReal(p.tipo())) {
                 sb.append("    f32.store\n");
             } else {
@@ -278,18 +253,13 @@ public class GeneradorCodigo {
             }
         }
 
-        // 4. Cuerpo
         for (Stmt s : fn.cuerpo().instrucciones()) {
             genStmt(s);
         }
 
-        // 5. Salida implicita
         if (esVoid(fn.tipoRetorno())) {
             sb.append("    call $releaseStack\n");
         } else {
-            // Una funcion no-void debe terminar siempre con return explicito;
-            // si llegamos aqui es codigo muerto. unreachable satisface al
-            // validador de wasm respecto al tipo de resultado.
             sb.append("    unreachable\n");
         }
 
@@ -299,7 +269,7 @@ public class GeneradorCodigo {
     }
 
     // ---------------------------------------------------------------
-    // codeI : instrucciones
+    // codeI
     // ---------------------------------------------------------------
 
     private void genStmt(Stmt s) {
@@ -326,7 +296,6 @@ public class GeneradorCodigo {
             sigOffsetLocal += info.sizeBytes;
         }
         if (dec.tieneInit()) {
-            // codeD(x); codeE(init); store
             emitDireccionId(dec.nombre());
             genExpr(dec.init());
             sb.append(esReal(dec.tipo()) ? "    f32.store\n" : "    i32.store\n");
@@ -334,7 +303,6 @@ public class GeneradorCodigo {
     }
 
     private void genAsig(Asignacion a) {
-        // codeD(lhs); codeE(rhs); store
         genDireccion(a.lhs());
         genExpr(a.rhs());
         sb.append(esRealExpr(a.lhs()) ? "    f32.store\n" : "    i32.store\n");
@@ -353,7 +321,6 @@ public class GeneradorCodigo {
     }
 
     private void genIf(If iff) {
-        // codeE(cond); if codeI(then) [else codeI(else)] end
         genExpr(iff.condicion());
         sb.append("    if\n");
         genBloque(iff.thenBloque());
@@ -365,7 +332,6 @@ public class GeneradorCodigo {
     }
 
     private void genWhile(While w) {
-        // block loop codeE(cond) i32.eqz br_if 1 codeI(body) br 0 end end
         sb.append("    block\n");
         sb.append("    loop\n");
         genExpr(w.condicion());
@@ -378,7 +344,6 @@ public class GeneradorCodigo {
     }
 
     private void genRead(Read r) {
-        // codeD(x); call $read|$readReal; store
         emitDireccionId(r.nombre());
         VarInfo info = buscarLocal(r.nombre());
         if (info == null) info = globales.get(r.nombre());
@@ -405,7 +370,7 @@ public class GeneradorCodigo {
     }
 
     // ---------------------------------------------------------------
-    // codeE : expresiones (deja el valor en la cima de la pila)
+    // codeE
     // ---------------------------------------------------------------
 
     private void genExpr(E e) {
@@ -421,7 +386,6 @@ public class GeneradorCodigo {
                 break;
             case ID:
             case ACCESO_ARRAY:
-                // codeD(designador); load (f32 si es real, i32 en otro caso)
                 genDireccion(e);
                 sb.append(esRealExpr(e) ? "    f32.load\n" : "    i32.load\n");
                 break;
@@ -466,7 +430,6 @@ public class GeneradorCodigo {
                     genExpr(e.opnd1());
                     sb.append("    f32.neg\n");
                 } else {
-                    // 0 - x
                     sb.append("    i32.const 0\n");
                     genExpr(e.opnd1());
                     sb.append("    i32.sub\n");
@@ -485,10 +448,8 @@ public class GeneradorCodigo {
         for (int i = 0; i < lf.args().size(); i++) {
             E arg = lf.args().get(i);
             if (params.get(i).esReferencia()) {
-                // pasar por referencia: empujar la direccion
                 genDireccion(arg);
             } else {
-                // pasar por valor
                 genExpr(arg);
             }
         }
@@ -496,7 +457,7 @@ public class GeneradorCodigo {
     }
 
     // ---------------------------------------------------------------
-    // codeD : direccion de un designador (lvalue)
+    // codeD: direccion
     // ---------------------------------------------------------------
 
     private void genDireccion(E e) {
@@ -510,16 +471,13 @@ public class GeneradorCodigo {
     private void emitDireccionId(String nombre) {
         VarInfo info = buscarLocal(nombre);
         if (info != null) {
-            // Variable en el marco actual
             sb.append("    global.get $MP\n");
             sb.append("    i32.const ").append(info.offset).append("\n");
             sb.append("    i32.add\n");
             if (info.referencia) {
-                // El slot contiene la direccion de la variable original
                 sb.append("    i32.load\n");
             }
         } else {
-            // Variable global (offset absoluto desde 0)
             VarInfo g = globales.get(nombre);
             sb.append("    i32.const ").append(g.offset).append("\n");
         }
@@ -534,12 +492,7 @@ public class GeneradorCodigo {
         return null;
     }
 
-    /**
-     * codeD(d[e]) = codeD(d) + codeE(e) * stride
-     * donde stride es el tamano en bytes de UN elemento del tipo de d.
-     * Para arrays multidimensionales esta recursion produce el indice plano
-     * acumulando offsets segun las dimensiones internas.
-     */
+    /** Direccion de acceso a array. */
     private void genDireccionAcceso(AccesoArray acc) {
         genDireccion(acc.array());
 
@@ -552,10 +505,7 @@ public class GeneradorCodigo {
         sb.append("    i32.add\n");
     }
 
-    /**
-     * Stride en bytes: cuanto ocupa un elemento al indexar la primera
-     * dimension. Para array[d1][d2]...[dn] of T es d2*..*dn*sizeof(T).
-     */
+    /** Stride en bytes. */
     private int strideEnBytes(T tipoBase) {
         if (tipoBase instanceof TipoArray) {
             TipoArray arr = (TipoArray) tipoBase;
@@ -580,7 +530,6 @@ public class GeneradorCodigo {
         return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("real");
     }
 
-    /** ¿La expresión tiene tipo real (segun la anotacion semantica)? */
     private boolean esRealExpr(E e) {
         return esReal(tipos.get(e));
     }

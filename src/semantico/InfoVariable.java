@@ -3,12 +3,12 @@ package semantico;
 import ast.T;
 
 /**
- * Metadatos de una variable o parámetro para la tabla de símbolos.
+ * Metadatos de una variable o parametro.
  */
 public class InfoVariable {
     private T tipo;
     private boolean esParametro;
-    private boolean esReferencia; // True si se pasa por referencia (&)
+    private boolean esReferencia; // True si es por referencia (&)
 
     public InfoVariable(T tipo, boolean esParametro, boolean esReferencia) {
         this.tipo = tipo;

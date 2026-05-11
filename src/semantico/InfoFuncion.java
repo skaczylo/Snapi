@@ -5,7 +5,7 @@ import ast.Parametro;
 import java.util.List;
 
 /**
- * Metadatos de una función para la tabla de símbolos.
+ * Metadatos de una funcion.
  */
 public class InfoFuncion {
     private T tipoRetorno;

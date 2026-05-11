@@ -1,4 +1,17 @@
-var int : x = 10;
-# Error sintáctico: Falta el punto y coma
-x = 20
-print(x);
+# Arrays multidimensionales: relleno e indexacion
+var array[3][3] of int : matriz;
+var int : i = 0;
+var int : j = 0;
+
+while (i < 3) {
+    j = 0;
+    while (j < 3) {
+        matriz[i][j] = i * 3 + j;
+        j = j + 1;
+    }
+    i = i + 1;
+}
+
+print(matriz[0][0]);
+print(matriz[1][2]);
+print(matriz[2][2]);

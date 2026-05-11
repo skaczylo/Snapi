@@ -43,20 +43,20 @@
     i32.const 42
     i32.store
     i32.const 4
-    f32.const 3.1415
-    f32.store
-    i32.const 8
     i32.const 1
     i32.store
+    i32.const 8
+    f32.const 3.1415
+    f32.store
     i32.const 0
     i32.load
     call $print
     i32.const 4
-    f32.load
-    call $printReal
-    i32.const 8
     i32.load
     call $print
+    i32.const 8
+    f32.load
+    call $printReal
   )
 
   (start $_main)

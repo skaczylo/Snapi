@@ -7,8 +7,8 @@
   (memory 1)
   (export "memory" (memory 0))
 
-  (global $SP (mut i32) (i32.const 44))
-  (global $MP (mut i32) (i32.const 44))
+  (global $SP (mut i32) (i32.const 20))
+  (global $MP (mut i32) (i32.const 20))
   (global $NP (mut i32) (i32.const 65532))
 
   ;; Reserva un marco de tamano $size sobre la pila.
@@ -39,75 +39,50 @@
   )
 
   (func $_main
-    i32.const 36
     i32.const 0
-    i32.store
-    i32.const 40
-    i32.const 0
-    i32.store
-    block
-    loop
-    i32.const 36
-    i32.load
-    i32.const 3
-    i32.lt_s
-    i32.eqz
-    br_if 1
-    i32.const 40
-    i32.const 0
-    i32.store
-    block
-    loop
-    i32.const 40
-    i32.load
-    i32.const 3
-    i32.lt_s
-    i32.eqz
-    br_if 1
-    i32.const 0
-    i32.const 36
-    i32.load
-    i32.const 12
-    i32.mul
-    i32.add
-    i32.const 40
-    i32.load
+    f32.const 3.0
+    f32.store
     i32.const 4
-    i32.mul
-    i32.add
-    i32.const 36
-    i32.load
-    i32.const 40
-    i32.load
-    i32.add
-    i32.store
-    i32.const 40
-    i32.const 40
-    i32.load
-    i32.const 1
-    i32.add
-    i32.store
-    br 0
-    end
-    end
-    i32.const 36
-    i32.const 36
-    i32.load
-    i32.const 1
-    i32.add
-    i32.store
-    br 0
-    end
-    end
+    f32.const 1.5
+    f32.store
+    i32.const 8
     i32.const 0
-    i32.const 1
-    i32.const 12
-    i32.mul
-    i32.add
-    i32.const 1
+    f32.load
     i32.const 4
-    i32.mul
-    i32.add
+    f32.load
+    f32.add
+    f32.store
+    i32.const 12
+    i32.const 0
+    f32.load
+    i32.const 4
+    f32.load
+    f32.mul
+    f32.store
+    i32.const 8
+    f32.load
+    call $printReal
+    i32.const 12
+    f32.load
+    call $printReal
+    i32.const 8
+    f32.load
+    f32.const 4.0
+    f32.gt
+    if
+    i32.const 1
+    call $print
+    else
+    i32.const 0
+    call $print
+    end
+    i32.const 16
+    i32.const 0
+    f32.load
+    f32.const 3.0
+    f32.eq
+    i32.store
+    i32.const 16
     i32.load
     call $print
   )

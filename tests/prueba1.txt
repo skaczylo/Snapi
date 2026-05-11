@@ -1,7 +1,8 @@
-var int : i = 42;
-var real : r = 3.1415;
-var bool : b = true;
+# Declaracion de variables de los tipos basicos y print
+var int : entero = 42;
+var bool : activo = true;
+var real : pi = 3.1415;
 
-print(i);
-print(r);
-print(b);
+print(entero);
+print(activo);
+print(pi);

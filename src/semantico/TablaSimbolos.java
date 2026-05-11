@@ -3,14 +3,14 @@ package semantico;
 import java.util.*;
 
 /**
- * Gestión de ámbitos anidados mediante una pila de mapas.
+ * Gestion de ambitos.
  */
 public class TablaSimbolos {
     private Deque<Map<String, Object>> pilaAmbitos;
 
     public TablaSimbolos() {
         pilaAmbitos = new ArrayDeque<>();
-        abrirAmbito(); // Ámbito global
+        abrirAmbito(); // Ambito global
     }
 
     public void abrirAmbito() {
@@ -30,7 +30,7 @@ public class TablaSimbolos {
     }
 
     /**
-     * Busca un símbolo desde el ámbito actual hacia el global.
+     * Busca un simbolo.
      */
     public Object buscar(String nombre) {
         for (Map<String, Object> ambito : pilaAmbitos) {
