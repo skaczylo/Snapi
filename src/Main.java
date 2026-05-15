@@ -30,7 +30,7 @@ public class Main {
         System.err.println("OK - sin errores semanticos");
         System.err.println();
 
-        System.err.println("=== CODIGO TAC GENERADO ===");
+        System.err.println("=== CODIGO GENERADO ===");
         GeneradorCodigo generador = new GeneradorCodigo(semantico.getTipos());
         generador.genPrograma(programa);
         generador.imprimir();

@@ -388,34 +388,3 @@ public class AnalizadorSemantico {
         return false;
     }
 }
-
-    private boolean esInt(T t) {
-        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("int");
-    }
-
-    private boolean esReal(T t) {
-        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("real");
-    }
-
-    private boolean esBool(T t) {
-        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("bool");
-    }
-
-    private boolean esVoid(T t) {
-        return t instanceof TipoBasico && ((TipoBasico) t).nombre().equals("void");
-    }
-
-    private boolean tiposCompatibles(T t1, T t2) {
-        if (t1 == null || t2 == null) return false;
-        if (t1 instanceof TipoBasico && t2 instanceof TipoBasico) {
-            return ((TipoBasico) t1).nombre().equals(((TipoBasico) t2).nombre());
-        }
-        if (t1 instanceof TipoArray && t2 instanceof TipoArray) {
-            TipoArray a1 = (TipoArray) t1;
-            TipoArray a2 = (TipoArray) t2;
-            return a1.dimensiones().equals(a2.dimensiones())
-                && tiposCompatibles(a1.tipoBase(), a2.tipoBase());
-        }
-        return false;
-    }
-}

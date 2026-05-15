@@ -11,12 +11,11 @@
   (global $MP (mut i32) (i32.const 20))
   (global $NP (mut i32) (i32.const 65532))
 
-  ;; Reserva un marco de tamano $size sobre la pila.
-  ;; Guarda el MP actual como DL en *(SP) y actualiza MP, SP.
+  ;; Reserva marco y actualiza MP, SP
   (func $reserveStack (param $size i32)
     global.get $SP
     global.get $MP
-    i32.store        ;; *(SP) = MP   (DL del nuevo marco)
+    i32.store        ;; *(SP) = MP
     global.get $SP
     global.set $MP   ;; MP = SP
     global.get $SP
@@ -29,13 +28,13 @@
     if unreachable end
   )
 
-  ;; Libera el marco actual: SP = MP; MP = *(MP)
+  ;; Libera marco
   (func $releaseStack
     global.get $MP
     global.set $SP   ;; SP = MP
     global.get $SP
     i32.load
-    global.set $MP   ;; MP = DL almacenado al principio del marco
+    global.set $MP   ;; MP = *(MP)
   )
 
   (func $potencia (param $base f32) (param $exp i32) (result f32)

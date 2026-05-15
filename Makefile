@@ -1,12 +1,12 @@
 # Configuración de variables
 JAVAC = javac
+JFLEX = jflex-1.9.1/bin/jflex
 BIN_DIR = bin
 SRC_DIR = src
 LIB = cup.jar
-CP = "$(BIN_DIR);$(LIB)"
+CP = $(BIN_DIR):$(LIB)
 
 # Lista de paquetes (carpetas con archivos .java)
-# Esto evita tener que usar un archivo temporal y problemas de codificación con el carácter 'º'
 PACKAGES = src/Main.java \
            src/alex/*.java \
            src/ast/*.java \
@@ -20,7 +20,7 @@ all: gen compile
 
 # Regenerar léxico con JFlex
 jflex-gen:
-	jflex -d src/alex src/alex/AnalizadorLexico.flex
+	$(JFLEX) -d src/alex src/alex/AnalizadorLexico.flex
 
 # Regenerar parser con CUP (sin position tracking para compatibilidad con UnidadLexica)
 cup-gen:
@@ -34,7 +34,7 @@ compile: | $(BIN_DIR)
 	$(JAVAC) -d $(BIN_DIR) -cp $(CP) $(PACKAGES)
 
 $(BIN_DIR):
-	if not exist $(BIN_DIR) mkdir $(BIN_DIR)
+	mkdir -p $(BIN_DIR)
 
 # Limpiar archivos compilados
 clean:
